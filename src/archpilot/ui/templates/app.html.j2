@@ -1,0 +1,2339 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArchPilot</title>
+
+  <!-- FOUC 방지: Alpine 로드 전에 저장된 테마 즉시 적용 -->
+  <script>
+    (function () {
+      const t = localStorage.getItem('archpilot-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+  <style>
+    /* ── 공통 변수 ────────────────────────────────────────────────── */
+    :root { --sidebar-w: 260px; }
+
+    /* ── 라이트 테마 (기본) ──────────────────────────────────────── */
+    /*    모든 색상값: WCAG AA 기준 대비비 4.5:1 이상 확보           */
+    [data-theme="light"] {
+      --bg:          #ffffff;
+      --bg2:         #f6f8fa;   /* sidebar, topbar, info-section */
+      --bg3:         #eef1f4;   /* card, input bg */
+      --border:      #d0d7de;
+      --text:        #1f2328;   /* 대비비 17.7:1 on #fff ✓ */
+      --muted:       #57606a;   /* 대비비  5.6:1 on #fff ✓ */
+      --accent:      #0969da;   /* GitHub Blue — 4.5:1 on #fff ✓ */
+      --accent-hover:#0550ae;
+      --success:     #1a7f37;   /* 4.8:1 on #fff ✓ */
+      --warn:        #7d4e00;   /* 6.2:1 on #fff ✓ */
+      --danger:      #cf222e;   /* 4.7:1 on #fff ✓ */
+      --btn-primary-fg: #ffffff;
+      --btn-success-fg: #ffffff;
+      --diagram-bg:  #ffffff;
+      --diagram-border: #d0d7de;
+      --shadow:      0 1px 3px rgba(31,35,40,.1), 0 4px 12px rgba(66,74,83,.08);
+      --stream-text: #24292f;
+      --chip-bg:     rgba(9,105,218,.1);
+      --tag-new-bg:  rgba(26,127,55,.12);
+      --tag-mod-bg:  rgba(125,78,0,.12);
+      --tag-del-bg:  rgba(207,34,46,.12);
+      --tag-same-bg: rgba(87,96,106,.1);
+      --scrollbar:   #c8ced5;
+    }
+
+    /* ── 다크 테마 ───────────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg:          #0d1117;
+      --bg2:         #161b22;
+      --bg3:         #21262d;
+      --border:      #30363d;
+      --text:        #e6edf3;   /* 대비비 14.8:1 on #0d1117 ✓ */
+      --muted:       #8b949e;   /* 대비비  5.4:1 on #161b22 ✓ */
+      --accent:      #58a6ff;
+      --accent-hover:#79b8ff;
+      --success:     #3fb950;
+      --warn:        #d29922;
+      --danger:      #f85149;
+      --btn-primary-fg: #0d1117;
+      --btn-success-fg: #0d1117;
+      --diagram-bg:  #ffffff;
+      --diagram-border: #444c56;
+      --shadow:      0 1px 3px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.4);
+      --stream-text: #8b949e;
+      --chip-bg:     rgba(88,166,255,.15);
+      --tag-new-bg:  rgba(63,185,80,.2);
+      --tag-mod-bg:  rgba(210,153,34,.2);
+      --tag-del-bg:  rgba(248,81,73,.2);
+      --tag-same-bg: rgba(139,148,158,.15);
+      --scrollbar:   #30363d;
+    }
+
+    /* ── Reset & Base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      transition: background .2s, color .2s;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    .app  { display: flex; flex-direction: column; height: 100vh; }
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── TopBar ──────────────────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 20px; height: 52px; min-height: 52px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      z-index: 10;
+    }
+    .topbar .logo {
+      font-size: 17px; font-weight: 700; color: var(--accent);
+      margin-right: auto; letter-spacing: -.3px;
+    }
+    .topbar .logo span {
+      color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 8px;
+    }
+
+    /* ── 테마 토글 버튼 ──────────────────────────────────────────── */
+    .theme-toggle {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 20px; /* pill 형태 */
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg3); color: var(--text);
+      transition: background .15s, border-color .15s, color .15s;
+      user-select: none;
+    }
+    .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .theme-toggle .toggle-icon { font-size: 14px; line-height: 1; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w); min-width: var(--sidebar-w);
+      background: var(--bg2); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .step-nav { padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .step-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 18px; cursor: default; opacity: .38;
+      transition: opacity .2s, background .15s;
+    }
+    .step-item.reachable { opacity: 1; cursor: pointer; }
+    .step-item.reachable:hover { background: var(--bg3); }
+    .step-item.active  { background: var(--bg3); opacity: 1; }
+    .step-item.done    { opacity: 1; cursor: pointer; }
+    .step-item.done:hover { background: var(--bg3); }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      background: var(--bg3); border: 1px solid var(--border); color: var(--muted);
+    }
+    .step-item.active .step-num { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .step-item.done   .step-num { background: var(--success); border-color: var(--success); color: #fff; }
+    .step-label { font-size: 13px; font-weight: 500; }
+
+    .input-panel {
+      flex: 1; padding: 14px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .panel-title {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px;
+    }
+
+    /* ── Main ────────────────────────────────────────────────────── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .diagram-section {
+      flex: 1; display: flex; flex-direction: column;
+      border-bottom: 1px solid var(--border); min-height: 0;
+    }
+    .diagram-tabs {
+      display: flex; border-bottom: 1px solid var(--border);
+      background: var(--bg2); padding: 0 16px;
+    }
+    .tab-btn {
+      padding: 9px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+      border: none; background: none; color: var(--muted);
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
+    }
+    .tab-btn.active     { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+    .tab-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 6px 0; }
+
+    .diagram-canvas {
+      flex: 1; overflow: hidden; position: relative;
+      cursor: grab; user-select: none;
+    }
+    .diagram-canvas.panning { cursor: grabbing; }
+
+    /* 팬/줌 변환 레이어 */
+    .diagram-transform {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    /* 스트리밍 캔버스는 기존 스크롤 방식 유지 */
+    .diagram-canvas.stream-canvas {
+      overflow: auto; cursor: default;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 20px;
+    }
+
+    /* 다이어그램 래퍼: 양 테마에서 흰 배경 유지 (Mermaid SVG 렌더링 기준) */
+    .diagram-wrapper {
+      background: var(--diagram-bg);
+      border: 1px solid var(--diagram-border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+      min-width: 200px;
+    }
+    .diagram-wrapper svg { height: auto; display: block; }
+
+    /* ── 줌 컨트롤 ───────────────────────────────────────────────── */
+    .zoom-controls {
+      display: flex; align-items: center; gap: 3px;
+    }
+    .zoom-btn {
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border); border-radius: 5px;
+      background: var(--bg3); color: var(--text);
+      cursor: pointer; font-size: 15px; font-weight: 700; line-height: 1;
+      transition: background .15s, border-color .15s, color .15s;
+      flex-shrink: 0;
+    }
+    .zoom-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--bg2); }
+    .zoom-level {
+      font-size: 11px; color: var(--muted); min-width: 38px; text-align: center;
+      font-weight: 600; font-variant-numeric: tabular-nums;
+    }
+
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--muted);
+    }
+    .empty-state .icon { font-size: 44px; }
+    .empty-state h3 { font-size: 15px; font-weight: 600; color: var(--text); }
+    .empty-state p  { font-size: 13px; text-align: center; max-width: 280px; line-height: 1.6; }
+
+    .info-section {
+      height: 220px; min-height: 180px;
+      background: var(--bg2); display: flex; flex-direction: column;
+    }
+    .info-tabs {
+      display: flex; border-bottom: 1px solid var(--border);
+      background: var(--bg); padding: 0 16px; flex-shrink: 0;
+    }
+    .info-content { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+    /* ── Form Controls ───────────────────────────────────────────── */
+    textarea, input[type=text] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12.5px;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      line-height: 1.55;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s, background .2s;
+    }
+    /* 라이트: 입력 필드 내 플레이스홀더 가독성 */
+    [data-theme="light"] textarea::placeholder,
+    [data-theme="light"] input[type=text]::placeholder { color: #9ea8b3; }
+    [data-theme="dark"]  textarea::placeholder,
+    [data-theme="dark"]  input[type=text]::placeholder  { color: #484f58; }
+    textarea:focus, input[type=text]:focus { border-color: var(--accent); }
+
+    /* ── 구조화 입력 — 파일 업로드 버튼 ──────────────────────────── */
+    .file-upload-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 7px 12px; margin-bottom: 6px;
+      border: 1px dashed var(--border); border-radius: 6px;
+      background: var(--bg); color: var(--muted);
+      cursor: pointer; font-size: 12px; box-sizing: border-box;
+      transition: border-color .2s, background .2s;
+    }
+    .file-upload-btn:hover { border-color: var(--accent); background: rgba(9,105,218,.04); }
+    [data-theme="dark"] .file-upload-btn:hover { background: rgba(88,166,255,.05); }
+    .file-upload-btn .fn { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    /* ── CodeMirror 6 에디터 컨테이너 ────────────────────────────── */
+    .cm-editor-wrap {
+      border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden; flex: 1;
+      transition: border-color .15s;
+    }
+    .cm-editor-wrap:focus-within { border-color: var(--accent); }
+    .cm-editor-wrap .cm-editor { height: 100%; }
+    .cm-editor-wrap .cm-scroller { overflow: auto; }
+
+    /* YAML 에러 배너 */
+    .yaml-error-banner {
+      display: none; margin-top: 4px; padding: 3px 8px;
+      background: rgba(207,34,46,.08); border: 1px solid var(--danger);
+      border-radius: 4px; color: var(--danger);
+      font-size: 10.5px; line-height: 1.4;
+    }
+    .yaml-error-banner.visible { display: block; }
+
+    /* ── Buttons ─────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 13px; border-radius: 6px;
+      font-size: 13px; font-weight: 500;
+      border: 1px solid var(--border); cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+      background: var(--bg3); color: var(--text); text-decoration: none;
+      line-height: 1.4;
+    }
+    .btn:hover { border-color: var(--muted); background: var(--bg2); }
+
+    .btn-primary {
+      background: var(--accent); border-color: var(--accent);
+      color: var(--btn-primary-fg);
+    }
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--btn-primary-fg); }
+
+    .btn-success {
+      background: var(--success); border-color: var(--success);
+      color: var(--btn-success-fg);
+    }
+    .btn-success:hover { filter: brightness(1.08); }
+
+    .btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+    .btn-danger:hover { background: rgba(207,34,46,.08); }
+    [data-theme="dark"] .btn-danger:hover { background: rgba(248,81,73,.1); }
+
+    .btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Progress & Stream ───────────────────────────────────────── */
+    .progress-bar-wrap {
+      background: var(--bg3); border-radius: 4px; overflow: hidden;
+      height: 6px; margin: 4px 0;
+    }
+    .progress-bar { height: 6px; background: var(--accent); transition: width .3s; }
+
+    /* 스트리밍 박스: 라이트에서 가독성 높은 어두운 텍스트 사용 */
+    .stream-box {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px;
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 11.5px; line-height: 1.6;
+      color: var(--stream-text);
+      max-height: 140px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* ── Info Panels ─────────────────────────────────────────────── */
+    .kv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .kv-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 12px;
+    }
+    .kv-card .kv-label {
+      font-size: 11px; color: var(--muted); margin-bottom: 2px;
+      font-weight: 600; letter-spacing: .2px;
+    }
+    .kv-card .kv-value { font-size: 20px; font-weight: 700; letter-spacing: -.5px; }
+
+    .tag {
+      display: inline-block; border-radius: 4px; padding: 2px 7px;
+      font-size: 11px; font-weight: 700; letter-spacing: .2px;
+    }
+    .tag-new  { background: var(--tag-new-bg);  color: var(--success); }
+    .tag-mod  { background: var(--tag-mod-bg);  color: var(--warn); }
+    .tag-del  { background: var(--tag-del-bg);  color: var(--danger); }
+    .tag-same { background: var(--tag-same-bg); color: var(--muted); }
+
+    .diff-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .diff-table th {
+      padding: 5px 10px; text-align: left; color: var(--muted);
+      border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11.5px;
+    }
+    .diff-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .diff-table tr:last-child td { border-bottom: none; }
+
+    .pain-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .pain-list li { display: flex; gap: 6px; font-size: 12.5px; line-height: 1.5; }
+    .pain-list li::before { content: "⚠"; color: var(--warn); flex-shrink: 0; }
+
+    .chip-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip {
+      background: var(--chip-bg); color: var(--accent);
+      border-radius: 12px; padding: 2px 10px;
+      font-size: 11.5px; font-weight: 500;
+    }
+
+    /* 마이그레이션 박스: 라이트에서 text로, 다크에서 muted로 */
+    .migration-box {
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 11.5px; line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    [data-theme="light"] .migration-box { color: #24292f; }
+    [data-theme="dark"]  .migration-box { color: var(--muted); }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    .toast-wrap {
+      position: fixed; bottom: 20px; right: 20px; z-index: 999;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 16px; font-size: 13px; max-width: 340px;
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: var(--shadow); animation: slide-in .2s ease;
+    }
+    .toast.error   { border-color: var(--danger); }
+    .toast.success { border-color: var(--success); }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+    /* ── 구분선 유틸 ─────────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+    /* ── 도움말 모달 ─────────────────────────────────────────────── */
+    .help-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.5); backdrop-filter: blur(3px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .help-modal {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: var(--shadow);
+      width: min(800px, 96vw); max-height: 82vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .help-modal-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .help-modal-header h2 { font-size: 15px; font-weight: 700; flex: 1; }
+    .help-modal-tabs {
+      display: flex; padding: 0 16px; gap: 2px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2); flex-shrink: 0; overflow-x: auto;
+    }
+    .help-tab {
+      padding: 9px 14px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+      border: none; background: none; color: var(--muted); white-space: nowrap;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
+    }
+    .help-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .help-tab:hover:not(.active) { color: var(--text); }
+    .help-modal-body {
+      flex: 1; overflow-y: auto; padding: 20px 24px;
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    .help-section h3 {
+      font-size: 13px; font-weight: 700; margin-bottom: 8px;
+      color: var(--text); display: flex; align-items: center; gap: 6px;
+    }
+    .help-section p, .help-section li { font-size: 13px; line-height: 1.7; color: var(--muted); }
+    .help-section ul { padding-left: 1.4em; margin-top: 4px; }
+    .help-section li { margin-bottom: 3px; }
+    .help-section strong { color: var(--text); }
+    .help-code {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 12px 14px; font-family: "SF Mono","Fira Code","Consolas",monospace;
+      font-size: 11.5px; line-height: 1.65; color: var(--text);
+      white-space: pre; overflow-x: auto; margin-top: 6px;
+    }
+    .help-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 6px; }
+    .help-table th {
+      text-align: left; padding: 6px 10px; color: var(--muted);
+      border-bottom: 1px solid var(--border); font-weight: 600; font-size: 11.5px;
+    }
+    .help-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .help-table tr:last-child td { border-bottom: none; }
+    .help-badge {
+      display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 4px;
+      padding: 1px 6px; margin-right: 2px;
+    }
+    .help-badge.required { background: rgba(207,34,46,.1); color: var(--danger); }
+    .help-badge.opt      { background: rgba(87,96,106,.1);  color: var(--muted); }
+    .help-badge.ai       { background: rgba(9,105,218,.1);  color: var(--accent); }
+    .help-tip {
+      background: rgba(9,105,218,.07); border-left: 3px solid var(--accent);
+      border-radius: 0 6px 6px 0; padding: 8px 12px; font-size: 12.5px;
+      color: var(--text); line-height: 1.6; margin-top: 6px;
+    }
+    [data-theme="dark"] .help-tip { background: rgba(88,166,255,.08); }
+    .help-warn {
+      background: rgba(125,78,0,.07); border-left: 3px solid var(--warn);
+      border-radius: 0 6px 6px 0; padding: 8px 12px; font-size: 12.5px;
+      color: var(--text); line-height: 1.6; margin-top: 6px;
+    }
+
+    /* 도움말 버튼 (topbar) */
+    .help-btn {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border); background: var(--bg3); color: var(--muted);
+      cursor: pointer; font-size: 13px; font-weight: 700;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .help-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--bg2); }
+
+    /* ── 입력 모드 탭 ────────────────────────────────────────────── */
+    .input-mode-tabs {
+      display: flex; gap: 2px; margin-bottom: 10px;
+      background: var(--bg3); border-radius: 6px; padding: 3px;
+    }
+    .input-tab {
+      flex: 1; padding: 4px 2px; border-radius: 4px;
+      font-size: 10.5px; font-weight: 500; cursor: pointer;
+      border: none; background: none; color: var(--muted);
+      transition: background .15s, color .15s; text-align: center; line-height: 1.3;
+    }
+    .input-tab.active { background: var(--bg); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .input-tab:hover:not(.active) { color: var(--text); }
+
+
+    /* ── draw.io 편집 패널 ───────────────────────────────────────── */
+    .drawio-pane {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+    }
+    .structured-pane {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+      padding: 18px 24px;
+    }
+    .structured-pane-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px; flex-shrink: 0;
+    }
+    .structured-pane-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 8px; flex-shrink: 0;
+    }
+    .chat-pane {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+      padding: 18px 24px;
+    }
+    .chat-pane-body {
+      display: flex; flex-direction: column; flex: 1; overflow: hidden;
+    }
+    .drawio-toolbar {
+      display: flex; align-items: center; gap: 10px; padding: 7px 14px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .drawio-hint {
+      font-size: 11.5px; color: var(--muted); flex: 1;
+    }
+    .drawio-body {
+      display: flex; flex-direction: row; flex: 1; overflow: hidden;
+    }
+    .drawio-iframe {
+      flex: 1; height: 100%; border: none; display: block;
+    }
+    .drawio-loading {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      flex: 1; gap: 10px; color: var(--muted);
+    }
+
+    /* ── ArchPilot 컴포넌트 가이드 패널 ───────────────────────── */
+    .ap-guide {
+      width: 176px; flex-shrink: 0;
+      background: var(--bg2); border-right: 1px solid var(--border);
+      overflow-y: auto; display: flex; flex-direction: column;
+      font-size: 12px;
+    }
+    .ap-guide-title {
+      font-size: 10.5px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      padding: 9px 10px 7px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ap-shape-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; cursor: pointer; user-select: none;
+      transition: background 0.12s;
+    }
+    .ap-shape-row:hover { background: var(--border); }
+    .ap-shape-row:hover .ap-copy { opacity: 1; }
+    .ap-preview { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 46px; }
+    .ap-info { flex: 1; min-width: 0; }
+    .ap-name  { font-weight: 600; color: var(--text); }
+    .ap-hint  { font-size: 10px; color: var(--muted); margin-top: 1px; line-height: 1.3; }
+    .ap-copy  { font-size: 11px; opacity: 0; transition: opacity 0.12s; flex-shrink: 0; }
+    .ap-guide-note {
+      margin-top: auto; padding: 8px 10px; flex-shrink: 0;
+      font-size: 10.5px; color: var(--muted); line-height: 1.6;
+      border-top: 1px solid var(--border);
+    }
+    .ap-guide-note kbd {
+      background: var(--border); border-radius: 3px;
+      padding: 0 3px; font-size: 10px; font-family: monospace;
+    }
+    /* CSS 도형 프리뷰 */
+    .aps { display: block; }
+    .aps-server   { width:44px; height:24px; background:#dae8fc; border:2px solid #6c8ebf; border-radius:3px; }
+    .aps-database { width:28px; height:36px; background:#f8cecc; border:2px solid #b85450;
+                    border-radius:50% 50% 3px 3px / 8px 8px 3px 3px; }
+    .aps-cache    { width:44px; height:22px; background:#fff2cc; border:2px solid #d6b656; border-radius:11px; }
+    .aps-queue    { width:44px; height:24px; background:#ffe6cc; border:2px solid #d79b00; border-radius:3px; }
+    .aps-storage  { width:20px; height:32px; background:#036897; border:2px solid #024d73; border-radius:2px; }
+    .aps-cdn      { width:44px; height:22px; background:#d5e8d4; border:2px solid #82b366; border-radius:11px; }
+    .aps-lb       { width:24px; height:24px; background:#f0a30a; border:2px solid #BD7000;
+                    border-radius:2px; transform:rotate(45deg); }
+    .aps-gateway  { width:44px; height:22px; background:#e1d5e7; border:2px solid #9673a6; border-radius:11px; }
+    .aps-service  { width:44px; height:24px; background:#d5e8d4; border:2px solid #82b366; border-radius:3px; }
+    .aps-client   { width:36px; height:28px; background:#f0f0f0; border:2px solid #888; border-radius:2px; }
+
+    /* ── AI 채팅 ─────────────────────────────────────────────────── */
+    .chat-messages {
+      flex: 1; min-height: 80px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 7px; padding: 4px 0;
+    }
+    .chat-bubble {
+      max-width: 92%; padding: 7px 10px; border-radius: 10px;
+      font-size: 12px; line-height: 1.55; word-break: break-word;
+    }
+    .chat-bubble.user {
+      align-self: flex-end; background: var(--accent);
+      color: var(--btn-primary-fg); border-bottom-right-radius: 3px;
+    }
+    .chat-bubble.assistant {
+      align-self: flex-start; background: var(--bg3);
+      color: var(--text); border-bottom-left-radius: 3px;
+    }
+    .chat-bubble.typing { opacity: .7; }
+    .chat-input-row { display: flex; gap: 5px; margin-top: 6px; }
+    .chat-textarea {
+      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); padding: 6px 9px; font-size: 12px; outline: none; resize: none;
+      transition: border-color .15s; font-family: inherit; line-height: 1.4;
+    }
+    .chat-textarea:focus { border-color: var(--accent); }
+    .chat-system-preview {
+      background: var(--bg3); border: 1px solid var(--success); border-radius: 6px;
+      padding: 8px; font-size: 11.5px; margin-top: 6px;
+    }
+  </style>
+  <!-- js-yaml: 실시간 YAML 파싱 오류 감지 -->
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+  <!-- es-module-shims: 구형 브라우저 importmap 폴백 -->
+  <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "@codemirror/state":          "https://esm.sh/@codemirror/state@6",
+      "@codemirror/view":           "https://esm.sh/@codemirror/view@6",
+      "@codemirror/commands":       "https://esm.sh/@codemirror/commands@6",
+      "@codemirror/language":       "https://esm.sh/@codemirror/language@6",
+      "@codemirror/lang-yaml":      "https://esm.sh/@codemirror/lang-yaml@6",
+      "@codemirror/lint":           "https://esm.sh/@codemirror/lint@6",
+      "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6"
+    }
+  }
+  </script>
+</head>
+
+<body x-data="archpilot()" x-init="init()">
+
+<!-- ── TopBar ───────────────────────────────────────────────────────────── -->
+<div class="app">
+<header class="topbar">
+  <div class="logo">🏗 ArchPilot <span>Legacy → Modern Architecture</span></div>
+
+  <template x-if="state.system">
+    <span class="chip" style="font-size:12px;">
+      📦 <span x-text="state.system?.name || '시스템'"></span>
+    </span>
+  </template>
+
+  <template x-if="state.modern">
+    <a :href="'/slides?theme=' + (isDark ? 'black' : 'white')"
+       target="_blank" class="btn btn-success btn-sm">▶ 발표 모드</a>
+  </template>
+
+  <button class="btn btn-danger btn-sm" @click="confirmReset()" x-show="state.system">
+    ↺ 초기화
+  </button>
+
+  <!-- 도움말 -->
+  <button class="help-btn" @click="openHelp('input')" title="도움말 열기">?</button>
+
+  <!-- 테마 토글 -->
+  <button class="theme-toggle" @click="toggleTheme()"
+          :title="isDark ? '라이트 모드로 전환' : '다크 모드로 전환'">
+    <span class="toggle-icon" x-text="isDark ? '☀️' : '🌙'"></span>
+    <span x-text="isDark ? '라이트' : '다크'"></span>
+  </button>
+</header>
+
+<!-- ── Body ─────────────────────────────────────────────────────────────── -->
+<div class="body">
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <nav class="step-nav">
+    <template x-for="(s, i) in steps" :key="i">
+      <div class="step-item"
+           :class="{
+             active:    activeStep === i,
+             done:      state.step > i,
+             reachable: i === 0 || state.step >= i,
+           }"
+           @click="goStep(i)">
+        <div class="step-num" x-text="state.step > i ? '✓' : (i + 1)"></div>
+        <div class="step-label" x-text="s.label"></div>
+      </div>
+    </template>
+  </nav>
+
+  <div class="input-panel">
+
+    <!-- Step 0: 시스템 입력 -->
+    <div x-show="activeStep === 0">
+      <div class="panel-title">시스템 정보 입력</div>
+
+      <!-- 입력 모드 탭 -->
+      <div class="input-mode-tabs">
+        <button class="input-tab" :class="{active: inputMode==='structured'}" @click="inputMode='structured'">📄<br>구조화</button>
+        <button class="input-tab" :class="{active: inputMode==='chat'}"       @click="inputMode='chat'">💬<br>AI</button>
+        <button class="input-tab" :class="{active: inputMode==='draw'}"       @click="openDrawMode()">🖊<br>편집</button>
+      </div>
+
+      <p style="font-size:12px; color:var(--muted); margin-top:12px; line-height:1.6;">
+        오른쪽 화면에서 시스템 정보를 입력하세요.
+      </p>
+    </div>
+
+    <!-- Step 1: 다이어그램 옵션 -->
+    <div x-show="activeStep === 1">
+      <div class="panel-title">다이어그램</div>
+      <div style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">
+        컴포넌트 <strong style="color:var(--text);" x-text="state.system?.components?.length ?? 0"></strong>개 &nbsp;·&nbsp;
+        연결 <strong style="color:var(--text);" x-text="state.system?.connections?.length ?? 0"></strong>개
+      </div>
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <button class="btn btn-sm" @click="downloadDiagram('legacy','mermaid')">💾 Mermaid (.mmd)</button>
+        <button class="btn btn-sm" @click="downloadDiagram('legacy','drawio')">💾 draw.io 다운로드</button>
+        <button class="btn btn-sm" @click="copyMmd('legacy')">📋 MMD 코드 복사</button>
+      </div>
+      <div class="divider"></div>
+      <button class="btn btn-primary" style="width:100%;"
+              :disabled="loading" @click="startAnalysis()">
+        <span x-show="!loading">🔍 AI 분석 시작 →</span>
+        <span x-show="loading">분석 중...</span>
+      </button>
+    </div>
+
+    <!-- Step 2: 분석 완료 + 현대화 요구사항 -->
+    <div x-show="activeStep === 2">
+      <div class="panel-title">분석 완료</div>
+      <template x-if="state.analysis">
+        <div style="display:flex; flex-direction:column; gap:5px; font-size:12.5px;">
+          <div>예상 공수: <strong x-text="state.analysis?.estimated_effort"></strong></div>
+          <div>문제점: <strong x-text="state.analysis?.pain_points?.length ?? 0"></strong>건</div>
+          <div>기술부채: <strong x-text="state.analysis?.tech_debt?.length ?? 0"></strong>건</div>
+          <div style="margin-top:2px;">권장 패턴</div>
+          <div class="chip-list">
+            <template x-for="p in (state.analysis?.recommended_patterns ?? []).slice(0, 4)">
+              <span class="chip" x-text="p"></span>
+            </template>
+          </div>
+        </div>
+      </template>
+      <div class="divider"></div>
+      <div class="panel-title">현대화 요구사항</div>
+      <textarea x-model="requirements" rows="5"
+        placeholder="AWS 마이크로서비스, EKS, RDS Aurora, ElastiCache Redis, S3, CloudFront CDN, API Gateway..."></textarea>
+      <button class="btn btn-primary" style="width:100%; margin-top:6px;"
+              :disabled="!requirements.trim() || loading"
+              @click="startModernize()">
+        <span x-show="!loading">⚙️ 현대화 설계 →</span>
+        <span x-show="loading">설계 중...</span>
+      </button>
+    </div>
+
+    <!-- Step 3: Modern 다이어그램 옵션 -->
+    <div x-show="activeStep === 3">
+      <div class="panel-title">현대화 완료</div>
+      <div style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">
+        컴포넌트 <strong style="color:var(--text);" x-text="state.modern?.components?.length ?? 0"></strong>개 &nbsp;·&nbsp;
+        연결 <strong style="color:var(--text);" x-text="state.modern?.connections?.length ?? 0"></strong>개
+      </div>
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <button class="btn btn-sm" @click="downloadDiagram('modern','mermaid')">💾 Modern Mermaid</button>
+        <button class="btn btn-sm" @click="downloadDiagram('modern','drawio')">💾 Modern draw.io</button>
+        <button class="btn btn-sm" @click="copyMmd('modern')">📋 Modern MMD 복사</button>
+      </div>
+      <div class="divider"></div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:5px;">요구사항 수정 후 재생성</div>
+      <textarea x-model="requirements" rows="4"></textarea>
+      <button class="btn btn-sm" style="width:100%; margin-top:5px;"
+              :disabled="!requirements.trim() || loading"
+              @click="startModernize()">🔄 재생성</button>
+    </div>
+
+    <!-- Step 4: 비교 & 발표 -->
+    <div x-show="activeStep === 4">
+      <div class="panel-title">발표 자료</div>
+      <a :href="'/slides?theme=' + (isDark ? 'black' : 'white')"
+         target="_blank" class="btn btn-success" style="width:100%; justify-content:center;">
+        ▶ 발표 모드 열기
+      </a>
+      <div style="margin-top:8px; display:flex; flex-direction:column; gap:5px;">
+        <a href="/slides?theme=black" target="_blank" class="btn btn-sm">🌑 Black 테마</a>
+        <a href="/slides?theme=white" target="_blank" class="btn btn-sm">☀️ White 테마</a>
+        <a href="/slides?theme=moon"  target="_blank" class="btn btn-sm">🌙 Moon 테마</a>
+      </div>
+    </div>
+
+  </div><!-- /input-panel -->
+</aside>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- ① 구조화 입력 패널 (Step 0 구조화 모드) -->
+  <div class="structured-pane" x-show="inputMode === 'structured' && activeStep === 0">
+    <!-- 파일 업로드 버튼 -->
+    <label class="file-upload-btn" style="margin-bottom:10px; flex-shrink:0;"
+           @dragover.prevent="$el.style.borderColor='var(--accent)'"
+           @dragleave="$el.style.borderColor=''"
+           @drop.prevent="handleDrop($event); $el.style.borderColor=''">
+      <span>📁</span>
+      <span class="fn" x-text="fileName || 'YAML / JSON 파일 불러오기'"></span>
+      <input type="file" style="display:none" accept=".yaml,.yml,.json,.txt"
+             @change="handleFileInput($event)">
+    </label>
+
+    <!-- 툴바 -->
+    <div class="structured-pane-toolbar">
+      <span style="font-size:12px; color:var(--muted);">YAML · JSON · 자연어 텍스트</span>
+      <div style="display:flex; gap:6px;">
+        <button class="btn btn-sm" @click="loadTemplate()" title="표준 YAML 템플릿 삽입">📋 템플릿</button>
+        <button class="btn btn-sm" @click="openHelp('template')">❓ 도움말</button>
+      </div>
+    </div>
+
+    <!-- CodeMirror 에디터 (flex:1 으로 가득 채움) -->
+    <div class="cm-editor-wrap" x-ref="cmEditorEl"
+         x-init="$nextTick(() => _initCodeMirror())"></div>
+
+    <!-- 푸터 -->
+    <div class="structured-pane-footer">
+      <div>
+        <div class="yaml-error-banner" :class="{ visible: cmError }" x-text="cmError"></div>
+        <span style="font-size:11px; color:var(--muted);">
+          <kbd style="background:var(--bg3); border-radius:3px; padding:1px 5px; font-size:10px;">Ctrl+Enter</kbd> 분석 시작
+        </span>
+      </div>
+      <button class="btn btn-primary" style="flex-shrink:0;"
+              :disabled="!inputText.trim() || loading" @click="ingest()">
+        <span x-show="!loading">다이어그램 생성 →</span>
+        <span x-show="loading">파싱 중...</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ② AI 대화형 입력 패널 (Step 0 채팅 모드) -->
+  <div class="chat-pane" x-show="inputMode === 'chat' && activeStep === 0">
+    <div class="chat-pane-body">
+      <!-- 채팅 메시지 영역 -->
+      <div class="chat-messages" x-ref="chatMessages">
+        <template x-if="chatMessages.length === 0">
+          <div style="font-size:13px; color:var(--muted); text-align:center; padding:40px 0;">
+            💬 시스템을 설명해보세요<br>
+            <span style="font-size:12px; margin-top:8px; display:block;">예) "AWS 기반 이커머스 시스템인데 웹서버, 앱서버, DB, 캐시로 구성돼 있어"</span>
+          </div>
+        </template>
+        <template x-for="(msg, i) in chatMessages" :key="i">
+          <div class="chat-bubble" :class="msg.role" x-text="msg.content"></div>
+        </template>
+        <div class="chat-bubble assistant typing" x-show="chatTypingText" x-text="chatTypingText"></div>
+      </div>
+
+      <!-- 시스템 확인 카드 -->
+      <div class="chat-system-preview" x-show="chatExtractedSystem" style="flex-shrink:0;">
+        <div style="font-weight:700; color:var(--success); margin-bottom:4px;">✅ 시스템 구성 완성</div>
+        <div style="color:var(--muted);" x-text="chatExtractedSystem?.name"></div>
+        <div style="color:var(--muted); font-size:11px;" x-text="(chatExtractedSystem?.components?.length ?? 0) + '개 컴포넌트, ' + (chatExtractedSystem?.connections?.length ?? 0) + '개 연결'"></div>
+        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+          <button class="btn btn-success" style="flex:1; justify-content:center; min-width:160px;"
+                  @click="confirmChatSystem()">
+            이 구성으로 다이어그램 생성 →
+          </button>
+          <button class="btn btn-sm" style="flex:1; justify-content:center; min-width:100px;"
+                  @click="chatExtractedSystem = null; chatMessages.push({role:'assistant', content:'다시 설명해 주세요. 어떤 부분을 수정할까요?'})">
+            수정 요청
+          </button>
+          <button class="btn btn-sm" style="flex:1; justify-content:center; min-width:100px;"
+                  @click="exportChatToYaml()">
+            📄 YAML로 정제하기
+          </button>
+        </div>
+      </div>
+
+      <!-- 채팅 입력 -->
+      <div class="chat-input-row" x-show="!chatExtractedSystem" style="flex-shrink:0; margin-top:8px;">
+        <textarea class="chat-textarea" rows="3" x-model="chatInput"
+                  placeholder="시스템 설명 입력... (Shift+Enter 줄바꿈)"
+                  :disabled="chatLoading"
+                  @keydown.enter.prevent="!$event.shiftKey && sendChat()"></textarea>
+        <button class="btn btn-primary btn-sm" style="align-self:flex-end; padding:10px 14px;"
+                :disabled="!chatInput.trim() || chatLoading"
+                @click="sendChat()">
+          <span x-show="!chatLoading">↑</span>
+          <span x-show="chatLoading">…</span>
+        </button>
+      </div>
+      <div x-show="chatLoading" style="font-size:12px; color:var(--muted); margin-top:6px; text-align:center;">AI 응답 중...</div>
+    </div>
+  </div>
+
+  <!-- ③ draw.io 비주얼 편집 패널 (Step 0 편집 모드에서만 표시) -->
+  <div class="drawio-pane" x-show="inputMode === 'draw' && activeStep === 0">
+    <div class="drawio-toolbar">
+      <span style="font-size:14px;">🖊</span>
+      <span style="font-size:13px; font-weight:600;">다이어그램 직접 편집</span>
+      <span class="drawio-hint">컴포넌트를 추가/수정 후 <strong>Save</strong> 버튼을 클릭하면 자동으로 반영됩니다.</span>
+      <div x-show="drawioSaving" style="font-size:12px; color:var(--accent);">⚙️ 저장 중...</div>
+      <button class="btn btn-sm" @click="inputMode = 'structured'">✕ 닫기</button>
+    </div>
+    <div class="drawio-loading" x-show="!drawioReady">
+      <div style="font-size:2em;">⏳</div>
+      <div style="font-size:13px;">편집기 로딩 중...</div>
+    </div>
+
+    <!-- 편집기 본문: 가이드 패널 + iframe -->
+    <div class="drawio-body" x-show="drawioReady">
+
+      <!-- ArchPilot 컴포넌트 가이드 패널 -->
+      <div class="ap-guide">
+        <div class="ap-guide-title">🧩 ArchPilot 컴포넌트</div>
+
+        <template x-for="s in _DRAWIO_SHAPES" :key="s.type">
+          <div class="ap-shape-row"
+               @click="copyShapeStyle(s.style, s.name)"
+               :title="s.name + ' 스타일 복사'">
+            <div class="ap-preview">
+              <span class="aps" :class="'aps-' + s.type"></span>
+            </div>
+            <div class="ap-info">
+              <div class="ap-name" x-text="s.name"></div>
+              <div class="ap-hint" x-text="s.hint"></div>
+            </div>
+            <div class="ap-copy">📋</div>
+          </div>
+        </template>
+
+        <div class="ap-guide-note">
+          도형 클릭 → 스타일 복사<br>
+          편집기에서 도형 우클릭 →<br>
+          <kbd>Edit Style</kbd> → 붙여넣기
+        </div>
+      </div>
+
+      <iframe
+        id="drawio-frame"
+        class="drawio-iframe"
+        x-ref="drawioFrame"
+        src="https://embed.diagrams.net/?embed=1&proto=json&spin=1&libraries=1&noSaveBtn=0&saveAndExit=0&lang=ko"
+        @load="onDrawioFrameLoad()">
+      </iframe>
+    </div>
+  </div>
+
+  <!-- 다이어그램 섹션 (Step 0에서는 숨김) -->
+  <div class="diagram-section" x-show="activeStep > 0">
+
+    <!-- 탭 바 -->
+    <div class="diagram-tabs" x-show="state.system">
+      <button class="tab-btn" :class="{ active: diagramTab === 'legacy' }"
+              @click="switchTab('legacy')">📦 Legacy</button>
+      <button class="tab-btn" :class="{ active: diagramTab === 'modern' }"
+              @click="switchTab('modern')"
+              :style="'opacity:' + (state.modern ? 1 : 0.35)"
+              :disabled="!state.modern">🚀 Modern</button>
+      <div class="tab-actions">
+        <!-- 줌 컨트롤 (다이어그램이 있을 때) -->
+        <div class="zoom-controls" x-show="currentMmd && !loading">
+          <button class="zoom-btn" @click="zoomOut()" title="축소 (휠 아래)">−</button>
+          <span class="zoom-level" x-text="Math.round(zoom * 100) + '%'"></span>
+          <button class="zoom-btn" @click="zoomIn()" title="확대 (휠 위)">+</button>
+          <button class="zoom-btn" @click="fitDiagram()" title="화면에 맞춤" style="font-size:11px;">⊞</button>
+        </div>
+        <!-- 진행률 -->
+        <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted);"
+             x-show="loading">
+          <span x-text="loadingMsg"></span>
+          <div style="width:80px;" class="progress-bar-wrap">
+            <div class="progress-bar" :style="`width:${progress}%`"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 빈 상태 (Step 1+에서 아직 시스템 없을 때) -->
+    <div class="empty-state" x-show="!state.system && !loading">
+      <div class="icon">🏗</div>
+      <h3>다이어그램이 없습니다</h3>
+      <p>왼쪽 패널에서 입력 방식을 선택하고<br>시스템 정보를 입력하세요.</p>
+    </div>
+
+    <!-- 로딩 중 (스트리밍 텍스트 없을 때: 스피너) / 스트리밍 중 -->
+    <div class="diagram-canvas stream-canvas" x-show="loading">
+      <div x-show="!streamText"
+           style="width:100%; text-align:center; padding:40px 0; color:var(--muted);">
+        <div style="font-size:2.2em; margin-bottom:10px;">⚙️</div>
+        <div style="font-size:13px;" x-text="loadingMsg || '처리 중...'"></div>
+        <div class="progress-bar-wrap" style="width:160px; margin:12px auto 0;" x-show="progress > 0">
+          <div class="progress-bar" :style="`width:${progress}%`"></div>
+        </div>
+      </div>
+      <div class="stream-box" x-ref="streamBox" x-text="streamText"
+           x-show="streamText" style="width:100%;"></div>
+    </div>
+
+    <!-- Mermaid 다이어그램 (팬/줌) -->
+    <div class="diagram-canvas"
+         :class="{ panning: isPanning }"
+         x-ref="diagramCanvas"
+         @wheel.prevent="onWheel($event)"
+         @mousedown="startPan($event)"
+         @mousemove="doPan($event)"
+         @mouseup="endPan()"
+         @mouseleave="endPan()"
+         x-show="!loading && currentMmd">
+      <div class="diagram-transform"
+           :style="`transform: translate(${panX}px, ${panY}px) scale(${zoom}); transform-origin: 0 0;`">
+        <div class="diagram-wrapper" id="mermaid-canvas"></div>
+      </div>
+    </div>
+
+  </div><!-- /diagram-section -->
+
+  <!-- 정보 섹션 -->
+  <div class="info-section" x-show="state.system && activeStep > 0">
+    <div class="info-tabs">
+      <button class="tab-btn" :class="{ active: infoTab === 'summary' }"
+              @click="infoTab = 'summary'">요약</button>
+      <button class="tab-btn" :class="{ active: infoTab === 'analysis' }"
+              @click="infoTab = 'analysis'"
+              x-show="state.analysis">분석 결과</button>
+      <button class="tab-btn" :class="{ active: infoTab === 'diff' }"
+              @click="infoTab = 'diff'"
+              x-show="state.modern">Before/After</button>
+      <button class="tab-btn" :class="{ active: infoTab === 'plan' }"
+              @click="infoTab = 'plan'"
+              x-show="state.migration_plan">마이그레이션</button>
+    </div>
+
+    <div class="info-content">
+
+      <!-- 요약 -->
+      <div x-show="infoTab === 'summary'">
+        <template x-if="state.system">
+          <div>
+            <div class="kv-grid" style="margin-bottom:10px;">
+              <div class="kv-card">
+                <div class="kv-label">컴포넌트</div>
+                <div class="kv-value" x-text="state.system?.components?.length ?? 0"></div>
+              </div>
+              <div class="kv-card">
+                <div class="kv-label">연결</div>
+                <div class="kv-value" x-text="state.system?.connections?.length ?? 0"></div>
+              </div>
+              <template x-if="state.analysis">
+                <div class="kv-card">
+                  <div class="kv-label">예상 공수</div>
+                  <div class="kv-value" x-text="state.analysis?.estimated_effort"></div>
+                </div>
+              </template>
+              <template x-if="state.modern">
+                <div class="kv-card">
+                  <div class="kv-label">Modern 컴포넌트</div>
+                  <div class="kv-value" x-text="state.modern?.components?.length ?? 0"></div>
+                </div>
+              </template>
+            </div>
+            <template x-if="state.analysis?.summary">
+              <p style="font-size:12.5px; color:var(--muted); line-height:1.6;"
+                 x-text="state.analysis.summary"></p>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- 분석 결과 -->
+      <div x-show="infoTab === 'analysis'" x-cloak>
+        <template x-if="state.analysis">
+          <div style="display:flex; gap:24px; flex-wrap:wrap;">
+            <div style="min-width:200px; flex:1;">
+              <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">
+                ⚠️ 주요 문제점
+              </div>
+              <ul class="pain-list">
+                <template x-for="p in state.analysis.pain_points ?? []">
+                  <li x-text="p"></li>
+                </template>
+              </ul>
+            </div>
+            <div style="min-width:200px; flex:1;">
+              <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">
+                💡 현대화 기회
+              </div>
+              <ul class="pain-list" style="list-style:none;">
+                <template x-for="o in state.analysis.modernization_opportunities ?? []">
+                  <li style="align-items:flex-start;">
+                    <span style="color:var(--accent); flex-shrink:0;">P<span x-text="o.priority"></span></span>
+                    <span>
+                      <strong x-text="o.area"></strong>:
+                      <span x-text="o.description"></span>
+                    </span>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Before/After -->
+      <div x-show="infoTab === 'diff'" x-cloak>
+        <template x-if="diff">
+          <table class="diff-table">
+            <thead>
+              <tr><th>컴포넌트</th><th>변경</th><th>Legacy</th><th>Modern</th></tr>
+            </thead>
+            <tbody>
+              <template x-for="c in diff.added ?? []">
+                <tr>
+                  <td x-text="c.label"></td>
+                  <td><span class="tag tag-new">NEW</span></td>
+                  <td style="color:var(--muted)">—</td>
+                  <td x-text="c.tech?.join(', ') || c.type"></td>
+                </tr>
+              </template>
+              <template x-for="ch in diff.modified ?? []">
+                <tr>
+                  <td x-text="ch.after?.label"></td>
+                  <td><span class="tag tag-mod">변경</span></td>
+                  <td x-text="ch.before?.tech?.join(', ') || ch.before?.host"></td>
+                  <td x-text="ch.after?.tech?.join(', ') || ch.after?.host"></td>
+                </tr>
+              </template>
+              <template x-for="c in diff.unchanged ?? []">
+                <tr>
+                  <td x-text="c.label"></td>
+                  <td><span class="tag tag-same">유지</span></td>
+                  <td colspan="2" x-text="c.tech?.join(', ')"></td>
+                </tr>
+              </template>
+              <template x-for="c in diff.removed ?? []">
+                <tr>
+                  <td x-text="c.label"></td>
+                  <td><span class="tag tag-del">제거</span></td>
+                  <td x-text="c.tech?.join(', ')"></td>
+                  <td style="color:var(--muted)">—</td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </template>
+      </div>
+
+      <!-- 마이그레이션 -->
+      <div x-show="infoTab === 'plan'" x-cloak>
+        <div class="migration-box" x-text="state.migration_plan"></div>
+      </div>
+
+    </div><!-- /info-content -->
+  </div><!-- /info-section -->
+
+</main>
+</div><!-- /body -->
+</div><!-- /app -->
+
+<!-- ── 도움말 모달 ─────────────────────────────────────────────────────────── -->
+<div class="help-overlay" x-show="showHelp" @click.self="showHelp=false" style="display:none;">
+<div class="help-modal" @click.stop>
+
+  <div class="help-modal-header">
+    <span style="font-size:18px;">📖</span>
+    <h2>ArchPilot 사용 가이드</h2>
+    <button class="btn btn-sm" @click="showHelp=false">✕ 닫기</button>
+  </div>
+
+  <div class="help-modal-tabs">
+    <button class="help-tab" :class="{active: helpTab==='input'}"    @click="helpTab='input'">📥 입력 방법</button>
+    <button class="help-tab" :class="{active: helpTab==='template'}" @click="helpTab='template'">📋 표준 형식</button>
+    <button class="help-tab" :class="{active: helpTab==='editor'}"   @click="helpTab='editor'">🖊 편집기</button>
+    <button class="help-tab" :class="{active: helpTab==='tips'}"     @click="helpTab='tips'">💡 AI 활용 팁</button>
+  </div>
+
+  <div class="help-modal-body">
+
+    <!-- ① 입력 방법 -->
+    <template x-if="helpTab==='input'">
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="help-section">
+          <h3>3가지 입력 방법</h3>
+          <table class="help-table">
+            <thead><tr><th>탭</th><th>방법</th><th>추천 상황</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>📄 구조화</strong></td>
+                <td>YAML/JSON 직접 작성 또는 파일 업로드</td>
+                <td>AI 분석 품질 최대화 (권장). 표준 템플릿 활용 시 domain·vintage·compliance 등 자동 반영</td>
+              </tr>
+              <tr>
+                <td><strong>💬 AI 대화</strong></td>
+                <td>자연어로 시스템 설명 → AI가 구성 추출</td>
+                <td>어디서 시작해야 할지 막막할 때. 완성 후 구조화 탭으로 YAML 내보내기 가능</td>
+              </tr>
+              <tr>
+                <td><strong>🖊 비주얼</strong></td>
+                <td>diagrams.net 에디터에서 직접 그리기</td>
+                <td>시각적으로 구성 확인하며 편집. ArchPilot 전용 도형 사용 시 타입 자동 인식</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <h3>AI 분석 품질을 높이는 핵심 원칙</h3>
+          <ul>
+            <li><strong>기술 버전을 명시</strong>하세요 — "Java" 대신 "Java EE 6", "Oracle" 대신 "Oracle 11g R2"</li>
+            <li><strong>구축 연도(vintage)</strong>를 입력하면 레거시 정도와 기술 부채를 정확히 평가합니다</li>
+            <li><strong>알려진 문제점(known_issues)</strong>을 직접 기술하면 AI가 최우선 개선 항목으로 처리합니다</li>
+            <li><strong>도메인(domain)</strong>을 지정하면 업종별 규정·패턴을 반영한 권고안을 생성합니다</li>
+            <li><strong>규제 요건(compliance)</strong>은 마이그레이션의 하드 제약 조건으로 반영됩니다</li>
+          </ul>
+        </div>
+
+        <div class="help-tip">
+          💡 <strong>가장 좋은 결과</strong>를 얻으려면 <strong>📄 구조화 탭</strong>에서
+          <strong>📋 표준 템플릿</strong>을 불러온 뒤, 항목별로 실제 시스템 정보를 채워 입력하세요.
+        </div>
+      </div>
+    </template>
+
+    <!-- ② 표준 형식 -->
+    <template x-if="helpTab==='template'">
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="help-section">
+          <h3>표준 YAML 입력 형식</h3>
+          <p>아래 형식은 AI 분석에 필요한 모든 컨텍스트를 제공합니다. <strong>필수(*)</strong> 항목 외 나머지는 선택입니다.</p>
+          <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+            <button class="btn btn-sm" @click="loadTemplate(); showHelp=false;">
+              📋 이 템플릿을 구조화 탭에 불러오기
+            </button>
+          </div>
+          <div class="help-code" x-text="YAML_TEMPLATE"></div>
+        </div>
+
+        <div class="help-section">
+          <h3>시스템 수준 필드 설명</h3>
+          <table class="help-table">
+            <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code></td><td><span class="help-badge required">필수</span></td><td>시스템 이름</td></tr>
+              <tr><td><code>description</code></td><td><span class="help-badge required">필수</span></td><td>주요 기능과 역할 (2~3줄)</td></tr>
+              <tr><td><code>domain</code></td><td><span class="help-badge ai">AI 향상</span></td><td>업종 — banking | ecommerce | logistics | healthcare | finance | manufacturing | government | other</td></tr>
+              <tr><td><code>vintage</code></td><td><span class="help-badge ai">AI 향상</span></td><td>최초 구축 연도 — 레거시 정도 판단 기준</td></tr>
+              <tr><td><code>scale</code></td><td><span class="help-badge opt">선택</span></td><td>일간 사용자, 초당 트랜잭션, 데이터 용량</td></tr>
+              <tr><td><code>compliance</code></td><td><span class="help-badge ai">AI 향상</span></td><td>규제/컴플라이언스 목록 — 하드 제약 조건으로 처리</td></tr>
+              <tr><td><code>known_issues</code></td><td><span class="help-badge ai">AI 향상</span></td><td>알려진 문제점 목록 — 최우선 개선 항목으로 반영</td></tr>
+              <tr><td><code>migration_priority</code></td><td><span class="help-badge opt">선택</span></td><td>high | medium | low</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <h3>컴포넌트(component) 필드 설명</h3>
+          <table class="help-table">
+            <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td><span class="help-badge required">필수</span></td><td>파일 내 고유 식별자 (snake_case)</td></tr>
+              <tr><td><code>type</code></td><td><span class="help-badge required">필수</span></td><td>server | database | cache | queue | storage | cdn | loadbalancer | gateway | service | client</td></tr>
+              <tr><td><code>label</code></td><td><span class="help-badge required">필수</span></td><td>다이어그램에 표시될 이름</td></tr>
+              <tr><td><code>tech</code></td><td><span class="help-badge ai">AI 향상</span></td><td>기술명 + 버전 목록 — 구체적일수록 분석 정확도 향상</td></tr>
+              <tr><td><code>host</code></td><td><span class="help-badge required">필수</span></td><td>on-premise | aws | gcp | azure | hybrid</td></tr>
+              <tr><td><code>vintage</code></td><td><span class="help-badge ai">AI 향상</span></td><td>컴포넌트 구축/마지막 업그레이드 연도</td></tr>
+              <tr><td><code>criticality</code></td><td><span class="help-badge ai">AI 향상</span></td><td>high | medium | low — 장애 시 비즈니스 영향도</td></tr>
+              <tr><td><code>notes</code></td><td><span class="help-badge ai">AI 향상</span></td><td>도메인 전문가 관찰 사항 — pain point로 직접 반영</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+
+    <!-- ③ 편집기 사용법 -->
+    <template x-if="helpTab==='editor'">
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="help-section">
+          <h3>전체 흐름</h3>
+          <ol style="font-size:13px; line-height:1.9; color:var(--muted); padding-left:1.4em;">
+            <li><strong>🖊 편집</strong> 탭 클릭 → diagrams.net 편집기가 우측에 로드됩니다</li>
+            <li>기존 시스템이 있으면 현재 다이어그램이 <strong>자동으로 불러와집니다</strong></li>
+            <li>캔버스에서 컴포넌트·연결을 자유롭게 편집합니다</li>
+            <li>완료 후 상단 <strong>Save</strong> 버튼 클릭 → ArchPilot이 자동 반영합니다</li>
+          </ol>
+        </div>
+
+        <div class="help-section">
+          <h3>주요 인터랙션</h3>
+          <table class="help-table">
+            <thead><tr><th>행위</th><th>동작</th></tr></thead>
+            <tbody>
+              <tr><td>빈 캔버스 더블클릭</td><td>새 컴포넌트(기본 사각형) 즉시 생성</td></tr>
+              <tr><td>노드 가장자리 호버 → 드래그</td><td>두 컴포넌트 간 연결선 생성</td></tr>
+              <tr><td>노드 / 연결선 더블클릭</td><td>레이블 인라인 편집</td></tr>
+              <tr><td>노드 우클릭</td><td>컨텍스트 메뉴 (스타일 변경, 삭제, 복사 등)</td></tr>
+              <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>실행 취소 / 재실행</td></tr>
+              <tr><td><code>Delete</code> 키</td><td>선택된 요소 삭제</td></tr>
+              <tr><td><code>Ctrl+S</code></td><td>저장 (ArchPilot에 반영)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <h3>🧩 ArchPilot 전용 도형 라이브러리</h3>
+          <p>편집기 좌측 패널의 <strong>ArchPilot</strong> 탭에서 컴포넌트 타입별 도형을 드래그해 사용하세요. 아래 도형은 저장 시 ComponentType이 자동으로 정확하게 인식됩니다.</p>
+          <table class="help-table">
+            <thead><tr><th>컴포넌트 타입</th><th>도형 모양</th><th>색상 / 스타일 특징</th><th>대표 기술</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Server</strong></td><td>파란 둥근 사각형</td><td>fillColor=#dae8fc</td><td>Web Server, App Server</td></tr>
+              <tr><td><strong>Database</strong></td><td>실린더 (원통)</td><td>shape=cylinder*, 또는 disk_storage</td><td>MySQL, Oracle, PostgreSQL</td></tr>
+              <tr><td><strong>Cache</strong></td><td>노란 타원</td><td>ellipse + fillColor=#fff2cc</td><td>Redis, Memcached</td></tr>
+              <tr><td><strong>Queue</strong></td><td>BPMN 태스크 박스</td><td>shape=mxgraph.bpmn.*</td><td>Kafka, RabbitMQ, SQS</td></tr>
+              <tr><td><strong>Storage</strong></td><td>Cisco 서버 아이콘</td><td>shape=mxgraph.cisco.servers.*</td><td>S3, NAS, 파일 서버</td></tr>
+              <tr><td><strong>CDN</strong></td><td>초록 타원</td><td>ellipse + fillColor=#d5e8d4</td><td>CloudFront, Akamai</td></tr>
+              <tr><td><strong>Load Balancer</strong></td><td>주황 마름모</td><td>shape=rhombus</td><td>ELB, ALB, Nginx LB</td></tr>
+              <tr><td><strong>Gateway</strong></td><td>보라 라운드 캡슐</td><td>arcSize=50 + fillColor=#e1d5e7</td><td>API Gateway, Kong</td></tr>
+              <tr><td><strong>Service</strong></td><td>초록 둥근 사각형</td><td>fillColor=#d5e8d4</td><td>마이크로서비스</td></tr>
+              <tr><td><strong>Client</strong></td><td>Cisco PC 아이콘</td><td>shape=mxgraph.cisco.computers.*</td><td>웹/모바일 클라이언트</td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:8px; font-size:12px; color:var(--muted);">
+            ⚠️ <strong>일반 도형 사용 시 주의</strong>: ArchPilot 라이브러리 외의 도형은 스타일이 인식되지 않아 모두 <code>Server</code>로 분류됩니다.<br>
+            특히 색상 없는 타원(ellipse), 사각형(rectangle), AWS 기본 라이브러리 아이콘은 정확한 타입 인식이 보장되지 않습니다.
+          </p>
+        </div>
+
+        <div class="help-section">
+          <h3>레이블 형식 — ArchPilot 파싱 규칙</h3>
+          <p>노드 레이블의 <strong>첫 줄 = 컴포넌트명</strong>, 이후 줄 = 기술 스택으로 파싱됩니다.</p>
+          <div class="help-code">웹 포털 (IIS)
+IIS 8.5
+ASP.NET 4.5
+Windows Server 2012</div>
+          <p style="margin-top:8px;">더블클릭 후 <code>Shift+Enter</code>로 줄 구분하여 입력하세요.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>호스트 환경 구분 — 수영 레인(Swimlane)</h3>
+          <p>수영 레인 이름으로 호스트 환경을 인식합니다. 레인 이름을 아래 표와 정확히 일치시켜 주세요.</p>
+          <table class="help-table">
+            <thead><tr><th>수영 레인 이름</th><th>인식 결과</th></tr></thead>
+            <tbody>
+              <tr><td><code>On-Premise</code></td><td>on-premise</td></tr>
+              <tr><td><code>AWS Cloud</code></td><td>aws</td></tr>
+              <tr><td><code>GCP Cloud</code></td><td>gcp</td></tr>
+              <tr><td><code>Azure Cloud</code></td><td>azure</td></tr>
+              <tr><td><code>Hybrid</code></td><td>hybrid</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-warn">
+          ⚠️ <strong>Save 없이 탭을 닫으면 변경 사항이 사라집니다.</strong><br>
+          편집기는 인터넷 연결이 필요합니다 (embed.diagrams.net CDN 사용).
+        </div>
+      </div>
+    </template>
+
+    <!-- ④ AI 활용 팁 -->
+    <template x-if="helpTab==='tips'">
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="help-section">
+          <h3>분석 품질을 높이는 체크리스트</h3>
+          <table class="help-table">
+            <thead><tr><th>항목</th><th>효과</th><th>예시</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>domain</code> 지정</td>
+                <td>업종별 규정·패턴 반영</td>
+                <td><code>banking</code>, <code>ecommerce</code></td>
+              </tr>
+              <tr>
+                <td>기술 버전 명시</td>
+                <td>EOL 여부, 보안 취약점 판단</td>
+                <td><code>Java EE 6</code>, <code>Oracle 11g R2</code></td>
+              </tr>
+              <tr>
+                <td><code>vintage</code> 기재</td>
+                <td>레거시 정도 정량화</td>
+                <td>시스템: <code>2005</code>, 컴포넌트: <code>2010</code></td>
+              </tr>
+              <tr>
+                <td><code>known_issues</code> 작성</td>
+                <td>확인된 문제 최우선 반영</td>
+                <td><code>배치 처리 8시간 소요</code></td>
+              </tr>
+              <tr>
+                <td><code>compliance</code> 명시</td>
+                <td>마이그레이션 하드 제약 생성</td>
+                <td><code>PCI-DSS</code>, <code>PIPA</code></td>
+              </tr>
+              <tr>
+                <td><code>criticality</code> 지정</td>
+                <td>위험 가중치 조정</td>
+                <td>결제 서버: <code>high</code></td>
+              </tr>
+              <tr>
+                <td>컴포넌트 <code>notes</code> 기술</td>
+                <td>전문가 관찰 사항 pain point화</td>
+                <td><code>IE11 의존성 높음</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <h3>현대화 요구사항 작성 팁</h3>
+          <p>Step 2에서 현대화 요구사항을 입력할 때, 다음 항목을 포함하면 더 구체적인 설계를 얻을 수 있습니다:</p>
+          <ul>
+            <li><strong>목표 클라우드 환경</strong> — "AWS, EKS 기반 컨테이너화"</li>
+            <li><strong>데이터베이스 전략</strong> — "Oracle → Aurora PostgreSQL 마이그레이션"</li>
+            <li><strong>서비스 분리 방향</strong> — "결제·계좌·고객 도메인으로 마이크로서비스 분리"</li>
+            <li><strong>성능 목표</strong> — "배치 처리를 이벤트 기반으로 전환, 실시간화"</li>
+            <li><strong>보안/컴플라이언스 유지</strong> — "PCI-DSS 준수 유지"</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>단계별 흐름</h3>
+          <ol style="font-size:13px; line-height:1.9; color:var(--muted); padding-left:1.4em;">
+            <li><strong>Step 1 — 시스템 입력:</strong> 표준 YAML로 레거시 시스템 정의</li>
+            <li><strong>Step 2 — AI 분석:</strong> GPT-4o가 pain point, 기술 부채, 위험 영역 자동 식별</li>
+            <li><strong>Step 3 — 현대화 설계:</strong> 요구사항 기술 → 현대화 아키텍처 자동 생성</li>
+            <li><strong>Step 4 — 비교 & 발표:</strong> Before/After 비교 + 마이그레이션 로드맵 + 발표 자료</li>
+          </ol>
+        </div>
+
+        <div class="help-tip">
+          💡 분석 완료 후 <strong>분석 결과를 확인</strong>하고, 공수 추정(S/M/L/XL)과 추천 패턴을 참고해 현대화 요구사항을 작성하면 더 정확한 설계가 생성됩니다.
+        </div>
+      </div>
+    </template>
+
+  </div><!-- /help-modal-body -->
+</div><!-- /help-modal -->
+</div><!-- /help-overlay -->
+
+<!-- ── Toast ─────────────────────────────────────────────────────────────── -->
+<div class="toast-wrap">
+  <template x-for="t in toasts" :key="t.id">
+    <div class="toast" :class="t.type">
+      <span x-text="t.type === 'error' ? '❌' : '✅'"></span>
+      <span x-text="t.msg"></span>
+    </div>
+  </template>
+</div>
+
+<script>
+// ── Mermaid 초기화 ────────────────────────────────────────────────────────
+mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+
+// ── Diff 계산 ─────────────────────────────────────────────────────────────
+function computeDiff(legacy, modern) {
+  if (!legacy || !modern) return null;
+  const lm = Object.fromEntries(legacy.components.map(c => [c.id, c]));
+  const mm = Object.fromEntries(modern.components.map(c => [c.id, c]));
+  const added = [], removed = [], modified = [], unchanged = [];
+  for (const [id, c] of Object.entries(mm)) {
+    if (!lm[id]) { added.push(c); continue; }
+    const changed = ['type','label','host'].filter(f => lm[id][f] !== c[f]);
+    if (changed.length) modified.push({ before: lm[id], after: c, changed_fields: changed });
+    else unchanged.push(c);
+  }
+  for (const [id, c] of Object.entries(lm)) { if (!mm[id]) removed.push(c); }
+  return { added, removed, modified, unchanged };
+}
+
+// ── Alpine.js 컴포넌트 ────────────────────────────────────────────────────
+function archpilot() {
+  return {
+    steps: [
+      { label: '시스템 입력' },
+      { label: '다이어그램 확인' },
+      { label: 'AI 분석' },
+      { label: '현대화 설계' },
+      { label: '비교 & 발표' },
+    ],
+    activeStep: 0,
+
+    // 테마
+    isDark: false,
+
+    // 서버 상태
+    state: {
+      step: 0, system: null, analysis: null, modern: null,
+      legacy_mmd: '', legacy_drawio: '', modern_mmd: '', modern_drawio: '',
+      migration_plan: '', requirements: '',
+    },
+
+    // UI 상태
+    diagramTab: 'legacy',
+    infoTab:    'summary',
+    inputText:  '',
+    fileName:   '',
+    requirements: '',
+    dragging:   false,
+    loading:    false,
+    loadingMsg: '',
+    progress:   0,
+    streamText: '',
+    toasts:     [],
+    diff:       null,
+
+    // 입력 모드
+    inputMode: 'structured',  // 'structured' | 'chat' | 'draw'
+
+    // CodeMirror 에디터 인스턴스
+    _cmEditor: null,
+    _themeCompartment: null,
+    cmError: '',
+
+    // AI 채팅 상태
+    chatMessages: [],         // [{role, content}]
+    chatInput: '',
+    chatLoading: false,
+    chatTypingText: '',
+    chatExtractedSystem: null,
+    chatExtractedMmd: '',
+    chatExtractedDrawio: '',
+
+    // draw.io 편집 상태
+    drawioReady: false,
+    drawioSaving: false,
+
+    // 도움말 모달
+    showHelp: false,
+    helpTab:  'input',
+
+    // 팬/줌 상태
+    zoom:       1,
+    panX:       0,
+    panY:       0,
+    isPanning:  false,
+    _panStart:  null,
+
+    // ── ArchPilot 컴포넌트 가이드 (가이드 패널 + 스타일 복사) ─────────
+    _DRAWIO_SHAPES: [
+      { type: 'server',      name: 'Server',       hint: 'Web/App 서버',       style: 'rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;' },
+      { type: 'database',    name: 'Database',     hint: '관계형 DB / NoSQL',  style: 'shape=cylinder3;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;' },
+      { type: 'cache',       name: 'Cache',        hint: 'Redis / Memcached',  style: 'ellipse;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;' },
+      { type: 'queue',       name: 'Queue',        hint: 'Kafka / SQS / MQ',  style: 'shape=mxgraph.bpmn.shape;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;' },
+      { type: 'storage',     name: 'Storage',      hint: 'S3 / NAS / 파일',   style: 'shape=mxgraph.cisco.servers.standard_server;html=1;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;' },
+      { type: 'cdn',         name: 'CDN',          hint: 'CloudFront / CDN',  style: 'ellipse;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;' },
+      { type: 'lb',          name: 'Load Balancer',hint: 'ELB / ALB / Nginx', style: 'rhombus;whiteSpace=wrap;fillColor=#f0a30a;strokeColor=#BD7000;' },
+      { type: 'gateway',     name: 'Gateway',      hint: 'API Gateway / Kong', style: 'rounded=1;arcSize=50;fillColor=#e1d5e7;strokeColor=#9673a6;' },
+      { type: 'service',     name: 'Service',      hint: '마이크로서비스',      style: 'rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;' },
+      { type: 'client',      name: 'Client',       hint: '웹 / 모바일 클라이언트', style: 'shape=mxgraph.cisco.computers.pc;html=1;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;' },
+    ],
+
+    // ── diagrams.net 커스텀 ArchPilot 라이브러리 설정 ────────────────
+    _DRAWIO_CONFIG: {
+      defaultLibraries: 'general',
+      libraries: [{
+        title: 'ArchPilot',
+        entries: [
+          {
+            title: 'Server',
+            desc: '서버 / 백엔드 서비스',
+            w: 120, h: 60,
+            xml: '<mxCell style="rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Database',
+            desc: '관계형 DB / NoSQL',
+            w: 80, h: 80,
+            xml: '<mxCell style="shape=cylinder3;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Cache',
+            desc: 'Redis / Memcached',
+            w: 100, h: 60,
+            xml: '<mxCell style="ellipse;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1"><mxGeometry width="100" height="60" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Queue',
+            desc: 'Kafka / RabbitMQ / SQS',
+            w: 120, h: 60,
+            xml: '<mxCell style="shape=mxgraph.bpmn.shape;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Storage',
+            desc: '파일 / 오브젝트 스토리지',
+            w: 60, h: 80,
+            xml: '<mxCell style="shape=mxgraph.cisco.servers.standard_server;html=1;pointerEvents=1;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;" vertex="1"><mxGeometry width="60" height="80" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'CDN',
+            desc: 'CloudFront / CDN',
+            w: 100, h: 60,
+            xml: '<mxCell style="ellipse;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1"><mxGeometry width="100" height="60" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Load Balancer',
+            desc: 'ELB / ALB / L4-L7',
+            w: 80, h: 80,
+            xml: '<mxCell style="rhombus;whiteSpace=wrap;fillColor=#f0a30a;fontColor=#000000;strokeColor=#BD7000;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Gateway',
+            desc: 'API Gateway',
+            w: 120, h: 60,
+            xml: '<mxCell style="rounded=1;arcSize=50;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Service',
+            desc: '마이크로서비스 / 내부 서비스',
+            w: 120, h: 60,
+            xml: '<mxCell style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
+          },
+          {
+            title: 'Client',
+            desc: '웹/모바일 클라이언트',
+            w: 50, h: 70,
+            xml: '<mxCell style="shape=mxgraph.cisco.computers.pc;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1"><mxGeometry width="50" height="70" as="geometry"/></mxCell>',
+          },
+        ],
+      }],
+    },
+
+    // ── YAML 표준 템플릿 (AI 분석 최적화) ────────────────────────────
+    YAML_TEMPLATE: `# ============================================================
+# ArchPilot 레거시 시스템 표준 입력 형식
+# 필수(*) 항목 외 선택 사항은 생략 가능합니다
+# ============================================================
+
+name: "시스템 이름 *"          # 예) 은행 코어 뱅킹 시스템
+description: "시스템 개요 *"   # 주요 기능과 역할을 2~3줄로
+
+# 도메인 (AI 분석 품질 향상)
+# banking | ecommerce | logistics | healthcare | finance | manufacturing | government | other
+domain: banking
+
+vintage: 2005           # 최초 구축 연도 (레거시 정도 판단)
+
+# 운영 규모 (현대화 설계 시 용량 계획에 활용)
+scale:
+  daily_active_users: 50000
+  peak_tps: 500               # 초당 최대 트랜잭션
+  data_volume_gb: 2000
+
+# 규제/컴플라이언스 (마이그레이션 하드 제약 조건으로 활용)
+compliance:
+  - "금융감독원 전자금융감독규정"
+  - "개인정보보호법 (PIPA)"
+
+# 알려진 문제점 (AI 분석 시 최우선 반영)
+known_issues:
+  - "DB 이중화 미흡으로 단일 장애점 존재"
+  - "배치 처리 야간 8시간 소요 (서비스 중단 동반)"
+  - "모놀리식 배포로 릴리즈 주기 월 1회 제한"
+  - "Java 7 EOL로 보안 패치 불가"
+
+migration_priority: high  # high | medium | low
+
+components:
+  - id: web_portal             # snake_case, 파일 내 고유값 *
+    type: server               # server|database|cache|queue|storage|cdn|loadbalancer|gateway|service|client *
+    label: "웹 포털 (IIS)"     # 다이어그램에 표시될 이름 *
+    tech:
+      - "IIS 8.5"              # 기술명 + 버전을 함께 기재 (AI 분석 정확도 향상)
+      - "ASP.NET 4.5"
+      - "Windows Server 2012"
+    host: on-premise           # on-premise | aws | gcp | azure | hybrid *
+    vintage: 2012              # 컴포넌트 구축/마지막 업그레이드 연도
+    criticality: high          # high | medium | low (장애 시 비즈니스 영향도)
+    notes: "IE11 의존성 높음, 모바일 미지원, 연간 패치 적용 부담"
+
+  - id: app_server
+    type: service
+    label: "코어 뱅킹 서버"
+    tech:
+      - "Java EE 6"
+      - "JBoss 4.2"
+      - "Spring 3.x"
+    host: on-premise
+    vintage: 2008
+    criticality: high
+    notes: "핵심 비즈니스 로직 집중, 연간 기능 변경 200건+"
+
+  - id: db_main
+    type: database
+    label: "운영 DB"
+    tech:
+      - "Oracle 11g R2"
+      - "RAC 2-node"
+    host: on-premise
+    vintage: 2010
+    criticality: high
+    notes: "라이선스 비용 연 3억, 업그레이드 일정 미정"
+
+connections:
+  - from_id: web_portal
+    to_id: app_server
+    protocol: "HTTP/SOAP"
+    label: "ESB 경유 동기 호출"
+  - from_id: app_server
+    to_id: db_main
+    protocol: "JDBC"
+`,
+
+    get currentMmd() {
+      return this.diagramTab === 'legacy' ? this.state.legacy_mmd : this.state.modern_mmd;
+    },
+
+    // ── 초기화 ────────────────────────────────────────────────────────
+    async init() {
+      // 저장된 테마 적용 (FOUC 방지 스크립트와 동기화)
+      const saved = localStorage.getItem('archpilot-theme') || 'light';
+      this.isDark = saved === 'dark';
+
+      // 서버 세션 복구
+      try {
+        const res = await fetch('/api/state');
+        this.state = await res.json();
+        this.requirements = this.state.requirements || '';
+        this.activeStep   = Math.min(this.state.step, 4);
+        if (this.state.modern && this.state.system) {
+          this.diff    = computeDiff(this.state.system, this.state.modern);
+          this.infoTab = 'diff';
+        }
+        if (this.state.system) this.renderDiagram();
+      } catch (e) { /* 첫 실행 시 무시 */ }
+
+      // draw.io 메시지 핸들러 등록 (한 번만)
+      this._initDrawioMessages();
+
+      // 편집 탭 전환 시 XML 로드 + CodeMirror 초기화
+      this.$watch('inputMode', (val) => {
+        if (val === 'structured') {
+          this.$nextTick(() => this._initCodeMirror());
+        }
+        if (val === 'draw' && this.drawioReady) {
+          this._loadXmlIntoDrawio();
+        }
+      });
+    },
+
+    // ── 테마 토글 ──────────────────────────────────────────────────────
+    async toggleTheme() {
+      this.isDark = !this.isDark;
+      const theme = this.isDark ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('archpilot-theme', theme);
+      // CodeMirror 테마 동기화
+      if (this._cmEditor && this._themeCompartment) {
+        const { oneDark } = await import('@codemirror/theme-one-dark').catch(() => ({ oneDark: [] }));
+        this._cmEditor.dispatch({
+          effects: this._themeCompartment.reconfigure(this.isDark ? oneDark : []),
+        });
+      }
+    },
+
+    // ── 다이어그램 렌더링 ──────────────────────────────────────────────
+    async renderDiagram() {
+      const mmd = this.currentMmd;
+      const wrapper = document.getElementById('mermaid-canvas');
+      if (!wrapper || !mmd) return;
+      try {
+        const uid = `g${Date.now()}`;
+        const { svg } = await mermaid.render(uid, mmd);
+        wrapper.innerHTML = svg;
+
+        // Mermaid가 SVG에 추가하는 max-width 인라인 스타일 제거 후
+        // viewBox 자연 크기로 명시 설정 → 고해상도 벡터 렌더링 보장
+        const svgEl = wrapper.querySelector('svg');
+        if (svgEl) {
+          svgEl.style.maxWidth = 'none';
+          svgEl.removeAttribute('width');
+          svgEl.removeAttribute('height');
+          const vb = svgEl.getAttribute('viewBox');
+          if (vb) {
+            const parts = vb.trim().split(/[\s,]+/).map(Number);
+            const w = parts[2], h = parts[3];
+            if (w > 0 && h > 0) {
+              svgEl.setAttribute('width',  w);
+              svgEl.setAttribute('height', h);
+            }
+          }
+        }
+
+        this.fitDiagram();
+      } catch (err) {
+        wrapper.innerHTML =
+          `<div style="color:var(--danger);padding:12px;font-size:13px;">
+             렌더링 오류: ${err.message}
+           </div>`;
+      }
+    },
+
+    // ── 팬/줌 ──────────────────────────────────────────────────────────
+    onWheel(e) {
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const newZoom = Math.min(Math.max(this.zoom * factor, 0.08), 8);
+      // 커서 위치 기준으로 줌
+      this.panX = mx - (mx - this.panX) * (newZoom / this.zoom);
+      this.panY = my - (my - this.panY) * (newZoom / this.zoom);
+      this.zoom = newZoom;
+    },
+    startPan(e) {
+      if (e.button !== 0) return;
+      this.isPanning = true;
+      this._panStart = { x: e.clientX - this.panX, y: e.clientY - this.panY };
+    },
+    doPan(e) {
+      if (!this.isPanning) return;
+      this.panX = e.clientX - this._panStart.x;
+      this.panY = e.clientY - this._panStart.y;
+    },
+    endPan() { this.isPanning = false; },
+    zoomIn()  { this._applyZoom(1.25); },
+    zoomOut() { this._applyZoom(0.8); },
+    _applyZoom(factor) {
+      const canvas = this.$refs.diagramCanvas;
+      if (!canvas) return;
+      const cx = canvas.clientWidth  / 2;
+      const cy = canvas.clientHeight / 2;
+      const newZoom = Math.min(Math.max(this.zoom * factor, 0.08), 8);
+      this.panX = cx - (cx - this.panX) * (newZoom / this.zoom);
+      this.panY = cy - (cy - this.panY) * (newZoom / this.zoom);
+      this.zoom = newZoom;
+    },
+    fitDiagram() {
+      this.$nextTick(() => {
+        const canvas  = this.$refs.diagramCanvas;
+        const wrapper = document.getElementById('mermaid-canvas');
+        if (!canvas || !wrapper) return;
+        const cw = canvas.clientWidth;
+        const ch = canvas.clientHeight;
+        const ww = wrapper.scrollWidth;
+        const wh = wrapper.scrollHeight;
+        if (!ww || !wh) return;
+        const pad   = 32;
+        const scale = Math.min((cw - pad) / ww, (ch - pad) / wh, 1.5);
+        this.zoom = scale;
+        this.panX = (cw - ww * scale) / 2;
+        this.panY = (ch - wh * scale) / 2;
+      });
+    },
+
+    // ── 탭 전환 ────────────────────────────────────────────────────────
+    switchTab(tab) {
+      this.diagramTab = tab;
+      this.$nextTick(() => this.renderDiagram());
+    },
+
+    // ── 단계 이동 ──────────────────────────────────────────────────────
+    goStep(i) {
+      if (i !== 0 && this.state.step < i) return;
+      this.activeStep = i;
+      this.diagramTab = i >= 3 ? 'modern' : 'legacy';
+      if (i === 4) this.infoTab = 'diff';
+      this.$nextTick(() => this.renderDiagram());
+    },
+
+    // ── 도움말 & YAML 템플릿 ────────────────────────────────────────────
+    openHelp(tab = 'input') {
+      this.helpTab  = tab;
+      this.showHelp = true;
+    },
+    loadTemplate() {
+      this.inputText = this.YAML_TEMPLATE;
+      this.inputMode = 'structured';
+      this._syncEditorContent(this.YAML_TEMPLATE);
+    },
+
+    // ── draw.io 편집 ────────────────────────────────────────────────────
+    _EMPTY_DRAWIO: '<mxGraphModel><root>'
+      + '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + '<mxCell id="group_on_premise" value="On-Premise" style="swimlane;startSize=20;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">'
+      + '<mxGeometry x="40" y="40" width="600" height="200" as="geometry"/></mxCell>'
+      + '</root></mxGraphModel>',
+
+    openDrawMode() {
+      this.inputMode = 'draw';
+      // iframe이 이미 ready면 즉시 XML 로드, 아니면 init 이벤트 대기
+      if (this.drawioReady) this._loadXmlIntoDrawio();
+    },
+
+    onDrawioFrameLoad() {
+      // iframe src 로드 완료 — diagrams.net의 'init' postMessage를 기다림
+      this.drawioReady = false;
+    },
+
+    _loadXmlIntoDrawio() {
+      const frame = this.$refs.drawioFrame;
+      if (!frame) return;
+      const xml = this.state.legacy_drawio || this._EMPTY_DRAWIO;
+      frame.contentWindow.postMessage(
+        JSON.stringify({ action: 'load', autosave: 1, xml }),
+        '*'
+      );
+    },
+
+    _initDrawioMessages() {
+      window.addEventListener('message', (e) => {
+        if (!e.data || typeof e.data !== 'string') return;
+        let msg;
+        try { msg = JSON.parse(e.data); } catch { return; }
+
+        const frame = this.$refs.drawioFrame;
+        if (!frame || e.source !== frame.contentWindow) return;
+
+        if (msg.event === 'init') {
+          this.drawioReady = true;
+          this._injectDrawioLibrary(frame);
+          if (this.inputMode === 'draw' && this.activeStep === 0) {
+            this._loadXmlIntoDrawio();
+          }
+        } else if (msg.event === 'save') {
+          this._onDrawioSave(msg.xml);
+        } else if (msg.event === 'autosave') {
+          // 자동저장은 반영하지 않음 (명시적 Save만 처리)
+        } else if (msg.event === 'exit') {
+          this.inputMode = 'structured';
+        }
+      });
+    },
+
+    async copyShapeStyle(style, name) {
+      try {
+        await navigator.clipboard.writeText(style);
+        this.toast('info', `📋 ${name} 스타일 복사 완료 — 편집기에서 도형 우클릭 → Edit Style → 붙여넣기`);
+      } catch {
+        this.toast('error', '클립보드 복사에 실패했습니다. HTTPS 환경에서 실행해 주세요.');
+      }
+    },
+
+    async _initCodeMirror() {
+      if (this._cmEditor) return;  // 이미 초기화됨
+      const el = this.$refs.cmEditorEl;
+      if (!el) return;
+
+      try {
+        const { EditorView, keymap, lineNumbers, highlightActiveLine,
+                drawSelection, dropCursor, rectangularSelection,
+                crosshairCursor, highlightSpecialChars } = await import('@codemirror/view');
+        const { EditorState, Compartment }               = await import('@codemirror/state');
+        const { history, defaultKeymap, historyKeymap,
+                indentWithTab }                          = await import('@codemirror/commands');
+        const { indentOnInput, syntaxHighlighting,
+                defaultHighlightStyle, bracketMatching } = await import('@codemirror/language');
+        const { yaml }                                   = await import('@codemirror/lang-yaml');
+        const { linter, lintGutter, lintKeymap }         = await import('@codemirror/lint');
+        const { oneDark }                                = await import('@codemirror/theme-one-dark');
+
+        this._themeCompartment = new Compartment();
+
+        const yamlLinter = linter((view) => {
+          if (typeof jsyaml === 'undefined') return [];
+          const text = view.state.doc.toString();
+          try {
+            jsyaml.load(text);
+            this.cmError = '';
+            return [];
+          } catch (e) {
+            this.cmError = e.reason || e.message || 'YAML 오류';
+            const pos = e.mark?.position ?? 0;
+            return [{ from: Math.min(pos, text.length), to: Math.min(pos + 1, text.length),
+                      severity: 'error', message: this.cmError }];
+          }
+        }, { delay: 400 });
+
+        const ingestKeymap = keymap.of([{
+          key: 'Ctrl-Enter', mac: 'Cmd-Enter',
+          run: () => { if (this.inputText.trim() && !this.loading) this.ingest(); return true; },
+        }]);
+
+        const onChange = EditorView.updateListener.of((update) => {
+          if (update.docChanged) this.inputText = update.state.doc.toString();
+        });
+
+        this._cmEditor = new EditorView({
+          state: EditorState.create({
+            doc: this.inputText,
+            extensions: [
+              highlightSpecialChars(), history(), drawSelection(), dropCursor(),
+              rectangularSelection(), crosshairCursor(), indentOnInput(),
+              syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+              bracketMatching(), lineNumbers(), highlightActiveLine(),
+              yaml(), yamlLinter, lintGutter(),
+              keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab, ...lintKeymap]),
+              ingestKeymap, onChange,
+              this._themeCompartment.of(this.isDark ? oneDark : []),
+              EditorView.theme({
+                '&': { height: '100%', fontSize: '12.5px' },
+                '.cm-scroller': { fontFamily: '"SF Mono","Fira Code","Consolas",monospace', overflow: 'auto' },
+              }),
+            ],
+          }),
+          parent: el,
+        });
+      } catch (err) {
+        console.warn('CodeMirror 로드 실패, textarea 폴백:', err);
+        // 폴백: 일반 textarea 렌더링 (el에 직접 삽입)
+        el.innerHTML = '<textarea style="width:100%;height:100%;border:none;padding:6px;font-family:monospace;font-size:12px;background:transparent;color:inherit;outline:none;resize:none;"></textarea>';
+        const ta = el.querySelector('textarea');
+        ta.value = this.inputText;
+        ta.addEventListener('input', () => { this.inputText = ta.value; });
+      }
+    },
+
+    _syncEditorContent(text) {
+      if (!this._cmEditor) return;
+      this._cmEditor.dispatch({
+        changes: { from: 0, to: this._cmEditor.state.doc.length, insert: text },
+      });
+    },
+
+    _injectDrawioLibrary(frame) {
+      // init 이후 openLibrary 액션으로 ArchPilot 커스텀 라이브러리를 사이드바에 추가.
+      const entries = this._DRAWIO_CONFIG.libraries[0].entries.map(e => ({
+        xml: e.xml, w: e.w, h: e.h, title: e.title,
+      }));
+      const libXml = `<mxlibrary>${JSON.stringify(entries)}</mxlibrary>`;
+      frame.contentWindow.postMessage(
+        JSON.stringify({ action: 'openLibrary', name: 'ArchPilot', xml: libXml }),
+        '*'
+      );
+    },
+
+    async _onDrawioSave(xml) {
+      if (!xml) return;
+      this.drawioSaving = true;
+      try {
+        const res = await fetch('/api/ingest/drawio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ xml, system_name: this.state.system?.name || 'Imported System' }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+          throw new Error(err.detail || '파싱 실패');
+        }
+        const data = await res.json();
+        Object.assign(this.state, {
+          system: data.system, legacy_mmd: data.legacy_mmd,
+          legacy_drawio: data.legacy_drawio, step: 1,
+          analysis: null, modern: null, modern_mmd: '',
+        });
+        this.diff = null;
+        this.activeStep = 1;
+        this.inputMode = 'structured';
+        this.diagramTab = 'legacy';
+        this.infoTab = 'summary';
+        this.toast('success', `✅ ${data.system.name} — ${data.system.components.length}개 컴포넌트 반영 완료`);
+        this.$nextTick(() => this.renderDiagram());
+      } catch (e) {
+        this.toast('error', `편집 반영 실패: ${e.message}`);
+      } finally {
+        this.drawioSaving = false;
+      }
+    },
+
+    // ── AI 채팅 ─────────────────────────────────────────────────────────
+    exportChatToYaml() {
+      if (!this.chatExtractedSystem) return;
+      const sys = { ...this.chatExtractedSystem };
+      delete sys.__system__;
+      let yamlText;
+      try {
+        yamlText = jsyaml.dump(sys, { indent: 2, lineWidth: 80, noRefs: true });
+      } catch {
+        yamlText = JSON.stringify(sys, null, 2);
+      }
+      this.inputText = yamlText;
+      this.inputMode = 'structured';
+      this._syncEditorContent(yamlText);
+      this.toast('success', '📄 구조화 탭에 YAML이 삽입되었습니다. 내용을 확인·수정 후 분석하세요.');
+    },
+
+    async sendChat() {
+      const text = this.chatInput.trim();
+      if (!text || this.chatLoading) return;
+      this.chatMessages.push({ role: 'user', content: text });
+      this.chatInput = '';
+      this.chatLoading = true;
+      this.chatTypingText = '';
+      this.$nextTick(() => {
+        const el = this.$refs.chatMessages;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+
+      let systemReady = false;
+      try {
+        await this.consumeStream(
+          '/api/chat/ingest/stream',
+          { messages: this.chatMessages },
+          async (d) => {
+            if (d.type === 'chunk') {
+              this.chatTypingText += d.text;
+              this.$nextTick(() => {
+                const el = this.$refs.chatMessages;
+                if (el) el.scrollTop = el.scrollHeight;
+              });
+            } else if (d.type === 'system_ready') {
+              this.chatExtractedSystem = d.system;
+              this.chatExtractedMmd = d.legacy_mmd;
+              this.chatExtractedDrawio = d.legacy_drawio || '';
+              this.chatMessages.push({
+                role: 'assistant',
+                content: '✅ 시스템 구성이 완성되었습니다! 아래 버튼으로 다이어그램을 생성하세요.',
+              });
+              systemReady = true;
+            } else if (d.type === 'reply') {
+              // chunks already accumulated in chatTypingText
+            } else if (d.type === 'error') {
+              throw new Error(d.msg);
+            }
+          }
+        );
+        if (!systemReady && this.chatTypingText.trim()) {
+          this.chatMessages.push({ role: 'assistant', content: this.chatTypingText });
+        }
+      } catch (e) {
+        this.toast('error', e.message);
+        if (!this.chatExtractedSystem) {
+          this.chatMessages.push({ role: 'assistant', content: `오류: ${e.message}` });
+        }
+      } finally {
+        this.chatLoading = false;
+        this.chatTypingText = '';
+        this.$nextTick(() => {
+          const el = this.$refs.chatMessages;
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      }
+    },
+    async confirmChatSystem() {
+      if (!this.chatExtractedSystem) return;
+      Object.assign(this.state, {
+        system: this.chatExtractedSystem,
+        legacy_mmd: this.chatExtractedMmd,
+        legacy_drawio: this.chatExtractedDrawio,
+        step: 1, analysis: null, modern: null, modern_mmd: '', modern_drawio: '',
+      });
+      this.diff = null;
+      this.activeStep = 1;
+      this.diagramTab = 'legacy';
+      this.infoTab = 'summary';
+      this.chatExtractedSystem = null;
+      this.chatMessages = [];
+      this.toast('success', `✅ ${this.state.system.name} 다이어그램 생성 완료`);
+      this.$nextTick(() => this.renderDiagram());
+    },
+
+    // ── 파일 업로드 ────────────────────────────────────────────────────
+    handleDrop(e) {
+      this.dragging = false;
+      const file = e.dataTransfer.files[0];
+      if (file) this.loadFile(file);
+    },
+    handleFileInput(e) {
+      const file = e.target.files[0];
+      if (file) this.loadFile(file);
+    },
+    async loadFile(file) {
+      this.fileName  = file.name;
+      const content  = await file.text();
+      this.inputText = content;
+      // CodeMirror 에디터 동기화
+      this._syncEditorContent(content);
+    },
+
+    // ── Ingest ─────────────────────────────────────────────────────────
+    async ingest() {
+      this.loading = true; this.loadingMsg = '파싱 중...'; this.streamText = '';
+      try {
+        const res = await fetch('/api/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: this.inputText, mode: 'auto' }),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '파싱 실패'); }
+        const data = await res.json();
+        Object.assign(this.state, {
+          system: data.system, legacy_mmd: data.legacy_mmd,
+          legacy_drawio: data.legacy_drawio, step: 1,
+          analysis: null, modern: null, modern_mmd: '',
+        });
+        this.diff = null; this.activeStep = 1;
+        this.diagramTab = 'legacy'; this.infoTab = 'summary';
+        this.toast('success', `✅ ${data.system.name} 파싱 완료`);
+        this.$nextTick(() => this.renderDiagram());
+      } catch (e) { this.toast('error', e.message); }
+      finally { this.loading = false; }
+    },
+
+    // ── SSE 스트림 소비 ────────────────────────────────────────────────
+    async consumeStream(url, body, onEvent) {
+      const opts = body
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        : { method: 'GET' };
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+        throw new Error(e.detail || `HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop();
+        for (const part of parts) {
+          if (part.startsWith('data: ')) {
+            let evt;
+            // JSON 파싱 실패는 무시, onEvent 내부 에러(error 이벤트 등)는 전파
+            try { evt = JSON.parse(part.slice(6)); } catch { continue; }
+            await onEvent(evt);
+          }
+        }
+      }
+    },
+
+    // ── 분석 ───────────────────────────────────────────────────────────
+    async startAnalysis() {
+      this.loading = true; this.progress = 0; this.streamText = '';
+      this.loadingMsg = '분석 준비 중...';
+      try {
+        await this.consumeStream('/api/analyze/stream', null, async (d) => {
+          if (d.type === 'progress') { this.progress = d.pct; this.loadingMsg = d.msg; }
+          else if (d.type === 'chunk') {
+            this.streamText += d.text;
+            this.$nextTick(() => {
+              const b = this.$refs.streamBox; if (b) b.scrollTop = b.scrollHeight;
+            });
+          }
+          else if (d.type === 'done') {
+            this.state.analysis = d.result; this.state.step = 3;
+            this.activeStep = 2; this.infoTab = 'analysis';
+            this.toast('success', '분석 완료');
+          }
+          else if (d.type === 'error') throw new Error(d.msg);
+        });
+      } catch (e) { this.toast('error', e.message); }
+      finally { this.loading = false; this.streamText = ''; this.progress = 0; }
+    },
+
+    // ── 현대화 ─────────────────────────────────────────────────────────
+    async startModernize() {
+      if (!this.requirements.trim()) return;
+      this.loading = true; this.progress = 0; this.streamText = '';
+      this.loadingMsg = '현대화 설계 중...';
+      try {
+        await this.consumeStream(
+          '/api/modernize/stream',
+          { requirements: this.requirements },
+          async (d) => {
+            if (d.type === 'progress') { this.progress = d.pct; this.loadingMsg = d.msg; }
+            else if (d.type === 'chunk') {
+              this.streamText += d.text;
+              this.$nextTick(() => {
+                const b = this.$refs.streamBox; if (b) b.scrollTop = b.scrollHeight;
+              });
+            }
+            else if (d.type === 'done') {
+              Object.assign(this.state, {
+                modern: d.modern, modern_mmd: d.modern_mmd,
+                modern_drawio: d.modern_drawio, migration_plan: d.migration_plan, step: 4,
+              });
+              this.diff = computeDiff(this.state.system, this.state.modern);
+              this.activeStep = 3; this.diagramTab = 'modern'; this.infoTab = 'diff';
+              this.toast('success', '현대화 설계 완료');
+              this.$nextTick(() => this.renderDiagram());
+            }
+            else if (d.type === 'error') throw new Error(d.msg);
+          }
+        );
+      } catch (e) { this.toast('error', e.message); }
+      finally { this.loading = false; this.streamText = ''; this.progress = 0; }
+    },
+
+    // ── 다이어그램 다운로드 ────────────────────────────────────────────
+    downloadDiagram(step, fmt) {
+      window.open(`/api/diagram/${step}?fmt=${fmt}`, '_blank');
+    },
+
+    // ── MMD 복사 ───────────────────────────────────────────────────────
+    async copyMmd(step) {
+      const mmd = step === 'legacy' ? this.state.legacy_mmd : this.state.modern_mmd;
+      if (!mmd) return;
+      await navigator.clipboard.writeText(mmd);
+      this.toast('success', 'Mermaid 코드가 복사됐습니다');
+    },
+
+    // ── 세션 초기화 ────────────────────────────────────────────────────
+    async confirmReset() {
+      if (!confirm('세션을 초기화하시겠습니까? 모든 데이터가 삭제됩니다.')) return;
+      await fetch('/api/state', { method: 'DELETE' });
+      location.reload();
+    },
+
+    // ── Toast ──────────────────────────────────────────────────────────
+    toast(type, msg) {
+      const id = Date.now();
+      this.toasts.push({ id, type, msg });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 3500);
+    },
+  };
+}
+</script>
+</body>
+</html>

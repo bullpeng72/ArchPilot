@@ -1,0 +1,33 @@
+# Environment
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+
+# Build
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Output
+output/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

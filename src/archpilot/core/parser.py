@@ -1,0 +1,142 @@
+"""Legacy 시스템 파일 파서 — YAML/JSON/텍스트 → SystemModel."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from archpilot.core.models import (
+    Component,
+    ComponentType,
+    Connection,
+    HostType,
+    SystemModel,
+)
+
+
+class ParseError(Exception):
+    """파싱 실패 시 발생."""
+
+
+class SystemParser:
+    """파일 경로를 받아 SystemModel을 반환하는 파서."""
+
+    def from_file(self, path: Path, use_llm: bool = True) -> SystemModel:
+        if not path.exists():
+            raise ParseError(f"파일을 찾을 수 없습니다: {path}")
+
+        suffix = path.suffix.lower()
+        raw = path.read_text(encoding="utf-8")
+
+        if suffix in (".yaml", ".yml"):
+            return self._from_yaml(raw, path)
+        elif suffix == ".json":
+            return self._from_json(raw, path)
+        elif suffix == ".txt":
+            if use_llm:
+                return self.from_text(raw)
+            raise ParseError(".txt 파일은 --no-llm 옵션과 함께 사용할 수 없습니다.")
+        else:
+            raise ParseError(f"지원하지 않는 파일 형식: {suffix} (yaml/json/txt만 지원)")
+
+    def _from_yaml(self, raw: str, path: Path) -> SystemModel:
+        try:
+            data = yaml.safe_load(raw)
+        except yaml.YAMLError as e:
+            raise ParseError(f"YAML 파싱 오류 [{path}]: {e}") from e
+        return self._dict_to_model(data)
+
+    def _from_json(self, raw: str, path: Path) -> SystemModel:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ParseError(f"JSON 파싱 오류 [{path}:{e.lineno}]: {e.msg}") from e
+        return self._dict_to_model(data)
+
+    def from_text(self, description: str) -> SystemModel:
+        """자연어 텍스트 → LLM 파싱 → SystemModel."""
+        from archpilot.llm.parser_agent import LLMParser
+
+        return LLMParser().from_text(description)
+
+    # SystemModel 이 직접 처리하는 최상위 필드
+    _SYSTEM_KNOWN = {"name", "description", "version", "components", "connections", "metadata"}
+
+    def _dict_to_model(self, data: Any) -> SystemModel:
+        if not isinstance(data, dict):
+            raise ParseError("최상위 데이터는 dict(매핑) 형식이어야 합니다.")
+        if "name" not in data:
+            raise ParseError("'name' 필드가 필요합니다.")
+        if not data.get("components"):
+            raise ParseError("'components' 목록이 비어있거나 없습니다.")
+
+        from archpilot.core.tech_ontology import enrich_component  # noqa: PLC0415
+        raw_comps = [enrich_component(dict(c)) for c in data["components"]]
+        components = [self._parse_component(c) for c in raw_comps]
+        connections = [self._parse_connection(c) for c in data.get("connections", [])]
+
+        # domain / vintage / scale / compliance / known_issues 등
+        # 표준 스키마에 없는 최상위 키를 metadata에 병합
+        extra = {k: v for k, v in data.items() if k not in self._SYSTEM_KNOWN}
+        metadata = {**data.get("metadata", {}), **extra}
+
+        return SystemModel(
+            name=data["name"],
+            description=data.get("description", ""),
+            version=str(data.get("version", "1.0")),
+            components=components,
+            connections=connections,
+            metadata=metadata,
+        )
+
+    # Component 가 직접 처리하는 필드
+    _COMP_KNOWN = {"id", "type", "label", "tech", "host", "specs", "metadata"}
+
+    def _parse_component(self, raw: dict) -> Component:
+        required = ("id", "type", "label")
+        for field in required:
+            if field not in raw:
+                raise ParseError(f"component에 '{field}' 필드가 필요합니다: {raw}")
+
+        # type 값이 enum에 없으면 UNKNOWN으로 fallback
+        try:
+            ctype = ComponentType(raw["type"].lower())
+        except ValueError:
+            ctype = ComponentType.UNKNOWN
+
+        # host 값이 enum에 없으면 ON_PREMISE로 fallback
+        try:
+            host = HostType(raw.get("host", "on-premise").lower())
+        except ValueError:
+            host = HostType.ON_PREMISE
+
+        # vintage / criticality / notes 등 확장 필드를 metadata에 병합
+        extra = {k: v for k, v in raw.items() if k not in self._COMP_KNOWN}
+        metadata = {**raw.get("metadata", {}), **extra}
+
+        return Component(
+            id=raw["id"],
+            type=ctype,
+            label=raw["label"],
+            tech=raw.get("tech", []),
+            host=host,
+            specs=raw.get("specs", {}),
+            metadata=metadata,
+        )
+
+    def _parse_connection(self, raw: dict) -> Connection:
+        from_id = raw.get("from") or raw.get("from_id")
+        to_id = raw.get("to") or raw.get("to_id")
+        if not from_id or not to_id:
+            raise ParseError(f"connection에 'from'과 'to' 필드가 필요합니다: {raw}")
+        return Connection(
+            from_id=from_id,
+            to_id=to_id,
+            protocol=raw.get("protocol", "HTTP"),
+            label=raw.get("label", ""),
+            bidirectional=raw.get("bidirectional", False),
+            metadata=raw.get("metadata", {}),
+        )
