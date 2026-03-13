@@ -1,4 +1,4 @@
-# ArchPilot — CLAUDE.md `v0.2.0`
+# ArchPilot — CLAUDE.md `v0.2.1`
 
 ## 프로젝트 개요
 
@@ -205,6 +205,15 @@ output/
 ---
 
 ## 📝 변경 이력
+
+### v0.2.1 (2026-03-13) — 실행 위치 독립성 개선
+
+- 🔧 `config.py` — 전역 설정 디렉토리 `~/.archpilot/config.env` 추가 (로컬 `.env`가 오버라이드)
+- 🔧 `config.py` — `output_dir` field_validator로 항상 절대 경로 보장
+- 🔧 `cmd_init.py` — 전역 `~/.archpilot/config.env`에 저장, `ARCHPILOT_OUTPUT_DIR` 절대 경로 기록
+- 🔧 `cmd_ingest.py`, `cmd_serve.py`, `cmd_drawio.py` — `--output` 기본값 `settings.output_dir`로 통일 (CWD 무관)
+- 📝 `docs/ARCHITECTURE.md` — `config.py` 코드 예시 현행화
+- 📝 `docs/SPEC.md`, `docs/USER_GUIDE.md` — `init` 동작 설명 현행화
 
 ### v0.2.0 (2026-03-13) — 아키텍처 문서화 완료 및 PyPI 배포 준비
 

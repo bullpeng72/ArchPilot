@@ -9,6 +9,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from archpilot.config import settings
+from archpilot.core.models import Criticality, LifecycleStatus
 from archpilot.core.parser import ParseError, SystemParser
 from archpilot.renderers.base import run_renderers_parallel
 
@@ -18,7 +20,7 @@ VALID_FORMATS = {"mermaid", "png", "svg", "drawio"}
 
 def ingest(
     file: Annotated[Path, typer.Argument(help="입력 파일 (yaml/json/txt)")],
-    output: Annotated[Path, typer.Option("--output", "-o", help="출력 디렉토리")] = Path("./output"),
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="출력 디렉토리")] = None,
     formats: Annotated[str, typer.Option("--format", "-f", help="출력 포맷 (콤마 구분): mermaid,png,svg,drawio")] = "mermaid",
     no_llm: Annotated[bool, typer.Option("--no-llm", help="LLM 파싱 비활성화")] = False,
     force: Annotated[bool, typer.Option("--force", help="출력 덮어쓰기")] = False,
@@ -38,6 +40,7 @@ def ingest(
         console.print(f"[red]지원하지 않는 포맷: {invalid}. 지원: {VALID_FORMATS}[/red]", err=True)
         raise typer.Exit(1)
 
+    output = (output or settings.output_dir).resolve()
     legacy_dir = output / "legacy"
     if legacy_dir.exists() and not force:
         overwrite = typer.confirm(f"{legacy_dir} 가 이미 존재합니다. 덮어쓰시겠습니까?", default=True)
@@ -76,4 +79,34 @@ def ingest(
 
     console.print()
     console.print(table)
+
+    # ── 엔터프라이즈 경고 요약 ──────────────────────────────────────────────
+    eol_comps = [c for c in model.components
+                 if c.lifecycle_status in (LifecycleStatus.EOL, LifecycleStatus.DEPRECATED)]
+    high_comps = [c for c in model.components if c.criticality == Criticality.HIGH]
+    restricted_comps = [c for c in model.components
+                        if c.data_classification is not None
+                        and c.data_classification.value in ("restricted", "confidential")]
+
+    if eol_comps or high_comps or restricted_comps:
+        console.print()
+        if eol_comps:
+            labels = ", ".join(c.label for c in eol_comps[:5])
+            suffix = f" 외 {len(eol_comps) - 5}개" if len(eol_comps) > 5 else ""
+            console.print(
+                f"[yellow]⚠  EOL/Deprecated 컴포넌트 {len(eol_comps)}개:[/yellow] {labels}{suffix}"
+            )
+        if high_comps:
+            labels = ", ".join(c.label for c in high_comps[:5])
+            suffix = f" 외 {len(high_comps) - 5}개" if len(high_comps) > 5 else ""
+            console.print(
+                f"[red]🔴 HIGH 중요도 컴포넌트 {len(high_comps)}개:[/red] {labels}{suffix}"
+            )
+        if restricted_comps:
+            labels = ", ".join(c.label for c in restricted_comps[:5])
+            suffix = f" 외 {len(restricted_comps) - 5}개" if len(restricted_comps) > 5 else ""
+            console.print(
+                f"[magenta]🔒 민감 데이터 컴포넌트 {len(restricted_comps)}개:[/magenta] {labels}{suffix}"
+            )
+
     console.print(f"\n다음 단계: [cyan]archpilot analyze {system_json_path}[/cyan]")

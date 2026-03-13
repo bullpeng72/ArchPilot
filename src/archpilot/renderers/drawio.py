@@ -19,6 +19,11 @@ STYLE_MAP: dict[ComponentType, str] = {
     ComponentType.GATEWAY:      "rounded=1;arcSize=50;whiteSpace=wrap;fillColor=#e1d5e7;strokeColor=#9673a6;",
     ComponentType.SERVICE:      "rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;",
     ComponentType.CLIENT:       "shape=mxgraph.flowchart.terminator;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;",
+    # 엔터프라이즈 타입 — 색상으로 성격 구분
+    ComponentType.MAINFRAME:    "rounded=0;whiteSpace=wrap;fillColor=#ccccff;strokeColor=#3333cc;fontStyle=1;",
+    ComponentType.ESB:          "rounded=1;arcSize=30;whiteSpace=wrap;fillColor=#f0d0ff;strokeColor=#9933cc;",
+    ComponentType.SECURITY:     "shape=mxgraph.flowchart.decision;whiteSpace=wrap;fillColor=#ffe6e6;strokeColor=#cc0000;",
+    ComponentType.MONITORING:   "rounded=1;whiteSpace=wrap;fillColor=#fffacd;strokeColor=#d4ac0d;",
     ComponentType.UNKNOWN:      "rounded=1;whiteSpace=wrap;",
 }
 
@@ -91,9 +96,13 @@ class DrawioRenderer(BaseRenderer):
 
         # 연결선
         for i, conn in enumerate(model.connections):
+            # 엣지 레이블: label > protocol, data_format은 괄호로 병기
+            edge_label = conn.label or (conn.protocol if conn.protocol != "HTTP" else "")
+            if conn.data_format:
+                edge_label = f"{edge_label} [{conn.data_format}]".strip()
             edge = ET.SubElement(graph_root, "mxCell",
                 id=f"edge_{i}",
-                value=conn.label or conn.protocol,
+                value=edge_label,
                 style="edgeStyle=orthogonalEdgeStyle;rounded=0;",
                 edge="1", source=conn.from_id, target=conn.to_id, parent="1")
             ET.SubElement(edge, "mxGeometry", relative="1", attrib={"as": "geometry"})

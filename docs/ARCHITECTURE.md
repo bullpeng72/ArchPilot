@@ -1,6 +1,6 @@
 # ArchPilot — 내부 아키텍처
 
-버전: 0.2.0
+버전: 0.2.1
 최종 수정: 2026-03-13
 
 ---
@@ -72,26 +72,37 @@
 ```python
 from pydantic_settings import BaseSettings
 
+GLOBAL_CONFIG_DIR = Path.home() / ".archpilot"
+GLOBAL_ENV_FILE = GLOBAL_CONFIG_DIR / "config.env"
+
 class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-4o"
     openai_max_tokens: int = 4096
-    output_dir: Path = Path("./output")
+    output_dir: Path = Path("./output")   # validator가 절대 경로로 변환
     diagram_format: str = "png"
     server_host: str = "127.0.0.1"
     server_port: int = 8080
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_prefix="ARCHPILOT_",    # ARCHPILOT_OUTPUT_DIR 등
+        # 전역 설정 → 로컬 .env 순서로 로드 (로컬이 전역을 오버라이드)
+        env_file=(GLOBAL_ENV_FILE, ".env"),
+        env_prefix="ARCHPILOT_",
         extra="ignore",
     )
+
+    @field_validator("output_dir", mode="after")
+    @classmethod
+    def _resolve_output_dir(cls, v: Path) -> Path:
+        return v.expanduser().resolve()
 
 settings = Settings()
 ```
 
 - 모든 모듈은 `from archpilot.config import settings`로 접근
 - 직접 `os.environ` 또는 `dotenv` 접근 금지
+- `archpilot init`은 `~/.archpilot/config.env`에 전역 설정 저장 (절대 경로)
+- 로컬 `.env`가 있으면 전역 설정을 오버라이드
 
 ---
 
@@ -241,6 +252,10 @@ def parse_drawio_xml(xml: str) -> SystemModel:
 | `swimlane` | (그룹/호스트 컨테이너) |
 | `cylinder` | DATABASE |
 | `rhombus` | QUEUE |
+| `#ccccff` (파란보라 배경) | MAINFRAME |
+| `arcSize=30` + `#f0d0ff` (보라 배경) | ESB |
+| `flowchart.decision` 또는 `shape=rhombus` | SECURITY |
+| `#fffacd` (밝은노랑 배경) | MONITORING |
 
 ---
 
@@ -308,6 +323,8 @@ class DiffResult(BaseModel):
     unchanged: list[Component]   # 동일
     connection_changes: list[ConnectionChange]
 ```
+
+변경 감지 필드 (7종): `type`, `label`, `tech`, `host`, `criticality`, `lifecycle_status`, `data_classification`
 
 reveal.js 슬라이드의 "Before/After 비교표"에 사용.
 

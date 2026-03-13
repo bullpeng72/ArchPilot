@@ -2,7 +2,7 @@
 
 > 시스템 입력부터 발표까지 — 실제 예제로 배우는 단계별 워크플로우
 
-버전: 0.2.0
+버전: 0.2.1
 최종 수정: 2026-03-13
 
 ---
@@ -44,28 +44,32 @@ pip install watchdog        # draw.io 파일 자동 감시 시 필요
 archpilot init
 ```
 
-실행하면 `.env` 파일 생성 마법사가 시작됩니다:
+실행하면 `~/.archpilot/config.env` 전역 설정 파일 생성 마법사가 시작됩니다:
 
 ```
 ArchPilot 초기화 마법사
 
 OpenAI API Key: sk-...
 모델 [gpt-4o]: (Enter로 기본값 사용)
-출력 디렉토리 [./output]: (Enter로 기본값 사용)
+출력 디렉토리 [/home/yourname/project/output]: (Enter로 기본값 사용)
 
-✅ .env 파일이 생성되었습니다.
+✅ 설정 파일이 생성되었습니다: /home/yourname/.archpilot/config.env
+   출력 디렉토리: /home/yourname/project/output
 ```
 
-생성된 `.env`:
+생성된 `~/.archpilot/config.env`:
 ```env
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o
 OPENAI_MAX_TOKENS=4096
-ARCHPILOT_OUTPUT_DIR=./output
+ARCHPILOT_OUTPUT_DIR=/home/yourname/project/output
 ARCHPILOT_DIAGRAM_FORMAT=png
 ARCHPILOT_SERVER_HOST=127.0.0.1
 ARCHPILOT_SERVER_PORT=8080
 ```
+
+> **팁**: 전역 설정은 어느 디렉토리에서 `archpilot`을 실행해도 자동으로 로드됩니다.
+> 프로젝트별로 다른 설정이 필요하면 해당 디렉토리에 `.env`를 만들면 전역 설정을 오버라이드합니다.
 
 ---
 

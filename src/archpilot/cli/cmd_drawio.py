@@ -111,24 +111,49 @@ def setup(
 
 @app.command("edit")
 def edit(
-    output: Annotated[Path, typer.Option("--output", "-o", help="output 디렉토리")] = Path("./output"),
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="output 디렉토리")] = None,
     watch: Annotated[bool, typer.Option("--watch", "-w", help="저장 시 자동 파싱 (file watch)")] = True,
 ) -> None:
-    """현재 시스템의 draw.io 파일을 draw.io Desktop으로 열고 변경을 감시합니다.
+    """draw.io Desktop으로 다이어그램을 열고 변경을 감시합니다.
 
     \b
-    전제 조건:
-      archpilot ingest 또는 archpilot serve 를 먼저 실행해 output/legacy/diagram.drawio 생성
+    - diagram.drawio 가 있으면 해당 파일을 엽니다.
+    - system.json 만 있으면 drawio 파일을 자동 생성 후 엽니다.
+    - 둘 다 없으면 빈 캔버스를 생성 후 엽니다.
     """
+    from archpilot.config import settings
     from archpilot.core.drawio_config import find_drawio_executable
 
+    output = (output or settings.output_dir).resolve()
     drawio_file = output / "legacy" / "diagram.drawio"
+
     if not drawio_file.exists():
-        console.print(
-            f"[red]❌ {drawio_file} 가 없습니다.[/red]\n"
-            "먼저 [cyan]archpilot ingest[/cyan] 또는 [cyan]archpilot serve[/cyan] 를 실행하세요.",
-        )
-        raise typer.Exit(1)
+        drawio_file.parent.mkdir(parents=True, exist_ok=True)
+        system_json = output / "system.json"
+
+        if system_json.exists():
+            # system.json 이 있으면 drawio 파일 자동 생성
+            import json as _json
+            from archpilot.core.parser import SystemParser
+            from archpilot.renderers.drawio import DrawioRenderer
+            data = _json.loads(system_json.read_text(encoding="utf-8"))
+            model = SystemParser()._dict_to_model(data)
+            drawio_file.write_text(DrawioRenderer().render(model), encoding="utf-8")
+            console.print(f"[green]✅ system.json으로 다이어그램 생성:[/green] {drawio_file}")
+        else:
+            # 빈 캔버스 생성
+            _BLANK_DRAWIO = (
+                '<mxGraphModel><root>'
+                '<mxCell id="0"/>'
+                '<mxCell id="1" parent="0"/>'
+                '</root></mxGraphModel>'
+            )
+            drawio_file.write_text(_BLANK_DRAWIO, encoding="utf-8")
+            console.print(f"[yellow]📄 빈 캔버스를 생성했습니다:[/yellow] {drawio_file}")
+            console.print(
+                "[dim]draw.io에서 다이어그램을 그린 뒤 저장(Ctrl+S)하면 "
+                "ArchPilot에 자동으로 반영됩니다.[/dim]"
+            )
 
     exe = find_drawio_executable()
     if not exe:
@@ -166,27 +191,32 @@ def edit(
 @app.command("watch")
 def watch_cmd(
     file: Annotated[Path, typer.Argument(help=".drawio 파일 경로")],
-    output: Annotated[Path, typer.Option("--output", "-o", help="output 디렉토리")] = Path("./output"),
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="output 디렉토리")] = None,
 ) -> None:
     """draw.io 파일의 변경을 감시하고 저장 시 자동으로 ArchPilot에 반영합니다."""
+    from archpilot.config import settings
+
     if not file.exists():
         console.print(f"[red]❌ 파일 없음:[/red] {file}")
         raise typer.Exit(1)
-    _watch_file(file, output)
+    _watch_file(file, (output or settings.output_dir).resolve())
 
 
 # ── export ────────────────────────────────────────────────────────────────────
 
 @app.command("export")
 def export_cmd(
-    system_json: Annotated[Path, typer.Argument(help="system.json 경로")] = Path("./output/system.json"),
+    system_json: Annotated[Optional[Path], typer.Argument(help="system.json 경로")] = None,
     dest: Annotated[Optional[Path], typer.Option("--dest", "-d", help="저장 경로 (기본: output/legacy/diagram.drawio)")] = None,
 ) -> None:
     """system.json → .drawio 파일로 내보냅니다."""
     import json as _json
 
+    from archpilot.config import settings
     from archpilot.core.parser import SystemParser
     from archpilot.renderers.drawio import DrawioRenderer
+
+    system_json = (system_json or settings.output_dir / "system.json").resolve()
 
     if not system_json.exists():
         console.print(f"[red]❌ 파일 없음:[/red] {system_json}")

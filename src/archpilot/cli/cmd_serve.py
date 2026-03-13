@@ -15,7 +15,7 @@ console = Console()
 
 
 def serve(
-    output_dir: Annotated[Path, typer.Argument(help="output 디렉토리")] = Path("./output"),
+    output_dir: Annotated[Path | None, typer.Argument(help="output 디렉토리")] = None,
     port: Annotated[int, typer.Option("--port", "-p", help="서버 포트")] = 8080,
     host: Annotated[str, typer.Option("--host", help="서버 호스트 주소")] = "127.0.0.1",
     open_browser: Annotated[bool, typer.Option("--open/--no-open", help="시작 시 브라우저 자동 열기")] = True,
@@ -28,8 +28,10 @@ def serve(
     전체 워크플로우를 실행할 수 있습니다.
     """
     import uvicorn
+    from archpilot.config import settings
     from archpilot.ui.server import create_app
 
+    output_dir = (output_dir or settings.output_dir).resolve()
     url = f"http://{host}:{port}"
 
     console.print(Panel(
@@ -56,15 +58,19 @@ def serve(
 
 
 def export(
-    output_dir: Annotated[Path, typer.Argument(help="output 디렉토리")] = Path("./output"),
-    dest: Annotated[Path, typer.Option("--dest", "-d", help="저장 디렉토리")] = Path("./dist"),
+    output_dir: Annotated[Path | None, typer.Argument(help="output 디렉토리")] = None,
+    dest: Annotated[Path | None, typer.Option("--dest", "-d", help="저장 디렉토리")] = None,
     theme: Annotated[str, typer.Option("--theme", help="reveal.js 테마: black,white,league,beige,sky,night,moon,serif,solarized")] = "black",
 ) -> None:
     """발표 슬라이드를 정적 HTML로 내보냅니다."""
     from jinja2 import Environment, PackageLoader, select_autoescape
+    from archpilot.config import settings
     from archpilot.core.models import AnalysisResult, SystemModel
     from archpilot.core.diff import SystemDiff
     from archpilot.ui import session as sess
+
+    output_dir = (output_dir or settings.output_dir).resolve()
+    dest = (dest or Path.cwd() / "dist").resolve()
 
     if not output_dir.exists():
         console.print(f"[red]디렉토리를 찾을 수 없습니다: {output_dir}[/red]", err=True)

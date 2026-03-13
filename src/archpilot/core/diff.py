@@ -51,7 +51,7 @@ class SystemDiff:
         )
 
     def _changed_fields(self, before: Component, after: Component) -> list[str]:
-        fields = ["type", "label", "tech", "host"]
+        fields = ["type", "label", "tech", "host", "criticality", "lifecycle_status", "data_classification"]
         changed = []
         for f in fields:
             if getattr(before, f) != getattr(after, f):

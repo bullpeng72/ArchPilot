@@ -763,9 +763,25 @@
       <div class="panel-title">분석 완료</div>
       <template x-if="state.analysis">
         <div style="display:flex; flex-direction:column; gap:5px; font-size:12.5px;">
+          <template x-if="state.analysis?.health_score !== undefined">
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+              <span style="color:var(--muted);">건강도</span>
+              <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
+                <div :style="`width:${state.analysis.health_score}%; height:100%; border-radius:4px; background:${state.analysis.health_score>=70?'#82b366':state.analysis.health_score>=40?'#d79b00':'#b85450'};`"></div>
+              </div>
+              <strong :style="`color:${state.analysis.health_score>=70?'#3d8a4e':state.analysis.health_score>=40?'#b87800':'#b85450'}`"
+                      x-text="state.analysis.health_score"></strong>
+            </div>
+          </template>
           <div>예상 공수: <strong x-text="state.analysis?.estimated_effort"></strong></div>
-          <div>문제점: <strong x-text="state.analysis?.pain_points?.length ?? 0"></strong>건</div>
-          <div>기술부채: <strong x-text="state.analysis?.tech_debt?.length ?? 0"></strong>건</div>
+          <div>문제점: <strong x-text="state.analysis?.pain_points?.length ?? 0"></strong>건 &nbsp;·&nbsp;
+               기술부채: <strong x-text="state.analysis?.tech_debt?.length ?? 0"></strong>건</div>
+          <template x-if="(state.analysis?.compliance_gaps ?? []).length > 0">
+            <div style="color:#b85450;">규제갭: <strong x-text="state.analysis.compliance_gaps.length"></strong>건</div>
+          </template>
+          <template x-if="(state.analysis?.security_findings ?? []).length > 0">
+            <div style="color:#b85450;">보안취약점: <strong x-text="state.analysis.security_findings.length"></strong>건</div>
+          </template>
           <div style="margin-top:2px;">권장 패턴</div>
           <div class="chip-list">
             <template x-for="p in (state.analysis?.recommended_patterns ?? []).slice(0, 4)">
@@ -1100,33 +1116,128 @@
       <!-- 분석 결과 -->
       <div x-show="infoTab === 'analysis'" x-cloak>
         <template x-if="state.analysis">
-          <div style="display:flex; gap:24px; flex-wrap:wrap;">
-            <div style="min-width:200px; flex:1;">
-              <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">
-                ⚠️ 주요 문제점
+          <div style="display:flex; flex-direction:column; gap:18px;">
+
+            <!-- 헬스 점수 -->
+            <template x-if="state.analysis.health_score !== undefined">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:11.5px; color:var(--muted); font-weight:700;">시스템 건강도</span>
+                <div style="flex:1; background:var(--border); border-radius:6px; height:10px; overflow:hidden;">
+                  <div :style="`width:${state.analysis.health_score}%; height:100%; border-radius:6px; background:${state.analysis.health_score >= 70 ? '#82b366' : state.analysis.health_score >= 40 ? '#d79b00' : '#b85450'};`"></div>
+                </div>
+                <span style="font-size:12px; font-weight:700; min-width:36px; text-align:right;"
+                      :style="`color:${state.analysis.health_score >= 70 ? 'var(--success,#3d8a4e)' : state.analysis.health_score >= 40 ? '#b87800' : '#b85450'}`"
+                      x-text="state.analysis.health_score + '/100'"></span>
               </div>
-              <ul class="pain-list">
-                <template x-for="p in state.analysis.pain_points ?? []">
-                  <li x-text="p"></li>
-                </template>
-              </ul>
-            </div>
-            <div style="min-width:200px; flex:1;">
-              <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">
-                💡 현대화 기회
+            </template>
+
+            <!-- 주요 문제점 + 현대화 기회 -->
+            <div style="display:flex; gap:24px; flex-wrap:wrap;">
+              <div style="min-width:200px; flex:1;">
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">⚠️ 주요 문제점</div>
+                <ul class="pain-list">
+                  <template x-for="p in state.analysis.pain_points ?? []">
+                    <li x-text="p"></li>
+                  </template>
+                </ul>
               </div>
-              <ul class="pain-list" style="list-style:none;">
-                <template x-for="o in state.analysis.modernization_opportunities ?? []">
-                  <li style="align-items:flex-start;">
-                    <span style="color:var(--accent); flex-shrink:0;">P<span x-text="o.priority"></span></span>
-                    <span>
-                      <strong x-text="o.area"></strong>:
-                      <span x-text="o.description"></span>
-                    </span>
-                  </li>
-                </template>
-              </ul>
+              <div style="min-width:200px; flex:1;">
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">💡 현대화 기회</div>
+                <ul class="pain-list" style="list-style:none;">
+                  <template x-for="o in state.analysis.modernization_opportunities ?? []">
+                    <li style="align-items:flex-start;">
+                      <span style="color:var(--accent); flex-shrink:0;">P<span x-text="o.priority"></span></span>
+                      <span><strong x-text="o.area"></strong>: <span x-text="o.description"></span></span>
+                    </li>
+                  </template>
+                </ul>
+              </div>
             </div>
+
+            <!-- 기술 부채 -->
+            <template x-if="(state.analysis.tech_debt ?? []).length > 0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">🔧 기술 부채</div>
+                <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border);">
+                      <th style="text-align:left; padding:3px 6px; color:var(--muted); font-weight:600; width:110px;">컴포넌트</th>
+                      <th style="text-align:left; padding:3px 6px; color:var(--muted); font-weight:600;">내용</th>
+                      <th style="text-align:center; padding:3px 6px; color:var(--muted); font-weight:600; width:56px;">심각도</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="td in state.analysis.tech_debt ?? []">
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:4px 6px; color:var(--accent); font-weight:600;" x-text="td.component_id"></td>
+                        <td style="padding:4px 6px; line-height:1.5;" x-text="td.description"></td>
+                        <td style="padding:4px 6px; text-align:center;">
+                          <span :style="`font-size:11px; padding:1px 5px; border-radius:3px; font-weight:700;
+                            background:${td.severity==='high'?'#fde8e8':td.severity==='medium'?'#fff3cd':'#e8f5e9'};
+                            color:${td.severity==='high'?'#b85450':td.severity==='medium'?'#856404':'#3d8a4e'};`"
+                               x-text="td.severity"></span>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+
+            <!-- 위험 영역 -->
+            <template x-if="(state.analysis.risk_areas ?? []).length > 0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">🚨 위험 영역</div>
+                <ul class="pain-list" style="list-style:none;">
+                  <template x-for="r in state.analysis.risk_areas ?? []">
+                    <li style="align-items:flex-start; flex-direction:column; gap:2px;">
+                      <div style="display:flex; gap:6px; align-items:center;">
+                        <span style="color:var(--accent); font-weight:700; font-size:11px;" x-text="r.component_id"></span>
+                        <span x-text="r.risk" style="line-height:1.5;"></span>
+                      </div>
+                      <div style="font-size:11px; color:var(--muted); padding-left:4px;" x-text="'💊 ' + r.mitigation"></div>
+                    </li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <!-- 규제 갭 + 보안 취약점 -->
+            <div style="display:flex; gap:24px; flex-wrap:wrap;">
+              <template x-if="(state.analysis.compliance_gaps ?? []).length > 0">
+                <div style="min-width:200px; flex:1;">
+                  <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">📋 규제 컴플라이언스 갭</div>
+                  <ul class="pain-list">
+                    <template x-for="g in state.analysis.compliance_gaps ?? []">
+                      <li x-text="g"></li>
+                    </template>
+                  </ul>
+                </div>
+              </template>
+              <template x-if="(state.analysis.security_findings ?? []).length > 0">
+                <div style="min-width:200px; flex:1;">
+                  <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">🔒 보안 취약점</div>
+                  <ul class="pain-list">
+                    <template x-for="f in state.analysis.security_findings ?? []">
+                      <li x-text="f"></li>
+                    </template>
+                  </ul>
+                </div>
+              </template>
+            </div>
+
+            <!-- 권장 패턴 -->
+            <template x-if="(state.analysis.recommended_patterns ?? []).length > 0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">🧩 권장 아키텍처 패턴</div>
+                <ul class="pain-list" style="list-style:none;">
+                  <template x-for="p in state.analysis.recommended_patterns ?? []">
+                    <li x-text="p"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
           </div>
         </template>
       </div>
@@ -1134,44 +1245,91 @@
       <!-- Before/After -->
       <div x-show="infoTab === 'diff'" x-cloak>
         <template x-if="diff">
-          <table class="diff-table">
-            <thead>
-              <tr><th>컴포넌트</th><th>변경</th><th>Legacy</th><th>Modern</th></tr>
-            </thead>
-            <tbody>
-              <template x-for="c in diff.added ?? []">
-                <tr>
-                  <td x-text="c.label"></td>
-                  <td><span class="tag tag-new">NEW</span></td>
-                  <td style="color:var(--muted)">—</td>
-                  <td x-text="c.tech?.join(', ') || c.type"></td>
-                </tr>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+
+            <!-- 전략 요약 칩 -->
+            <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:11.5px;">
+              <template x-if="(diff.added??[]).length>0">
+                <span style="background:#e8f5e9;color:#3d8a4e;padding:2px 8px;border-radius:10px;">
+                  ✨ 신규 <strong x-text="(diff.added??[]).length"></strong>
+                </span>
               </template>
-              <template x-for="ch in diff.modified ?? []">
-                <tr>
-                  <td x-text="ch.after?.label"></td>
-                  <td><span class="tag tag-mod">변경</span></td>
-                  <td x-text="ch.before?.tech?.join(', ') || ch.before?.host"></td>
-                  <td x-text="ch.after?.tech?.join(', ') || ch.after?.host"></td>
-                </tr>
+              <template x-if="(diff.modified??[]).length>0">
+                <span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;">
+                  🔄 변경 <strong x-text="(diff.modified??[]).length"></strong>
+                </span>
               </template>
-              <template x-for="c in diff.unchanged ?? []">
-                <tr>
-                  <td x-text="c.label"></td>
-                  <td><span class="tag tag-same">유지</span></td>
-                  <td colspan="2" x-text="c.tech?.join(', ')"></td>
-                </tr>
+              <template x-if="(diff.removed??[]).length>0">
+                <span style="background:#fde8e8;color:#b85450;padding:2px 8px;border-radius:10px;">
+                  🗑 제거 <strong x-text="(diff.removed??[]).length"></strong>
+                </span>
               </template>
-              <template x-for="c in diff.removed ?? []">
-                <tr>
-                  <td x-text="c.label"></td>
-                  <td><span class="tag tag-del">제거</span></td>
-                  <td x-text="c.tech?.join(', ')"></td>
-                  <td style="color:var(--muted)">—</td>
-                </tr>
+              <template x-if="(diff.unchanged??[]).length>0">
+                <span style="background:var(--border);color:var(--muted);padding:2px 8px;border-radius:10px;">
+                  = 유지 <strong x-text="(diff.unchanged??[]).length"></strong>
+                </span>
               </template>
-            </tbody>
-          </table>
+            </div>
+
+            <table class="diff-table">
+              <thead>
+                <tr>
+                  <th>컴포넌트</th>
+                  <th>변경</th>
+                  <th>전략</th>
+                  <th>Legacy 기술</th>
+                  <th>Modern 기술</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="c in diff.added ?? []">
+                  <tr>
+                    <td>
+                      <div x-text="c.label"></div>
+                      <template x-if="c.metadata?.reason">
+                        <div style="font-size:10.5px;color:var(--muted);line-height:1.4;margin-top:2px;" x-text="c.metadata.reason"></div>
+                      </template>
+                    </td>
+                    <td><span class="tag tag-new">NEW</span></td>
+                    <td style="font-size:11px;color:#3d8a4e;" x-text="c.metadata?.strategy || '—'"></td>
+                    <td style="color:var(--muted)">—</td>
+                    <td x-text="c.tech?.join(', ') || c.type"></td>
+                  </tr>
+                </template>
+                <template x-for="ch in diff.modified ?? []">
+                  <tr>
+                    <td>
+                      <div x-text="ch.after?.label"></div>
+                      <template x-if="ch.after?.metadata?.reason">
+                        <div style="font-size:10.5px;color:var(--muted);line-height:1.4;margin-top:2px;" x-text="ch.after.metadata.reason"></div>
+                      </template>
+                    </td>
+                    <td><span class="tag tag-mod">변경</span></td>
+                    <td style="font-size:11px;color:#856404;" x-text="ch.after?.metadata?.strategy || '—'"></td>
+                    <td x-text="ch.before?.tech?.join(', ') || ch.before?.host"></td>
+                    <td x-text="ch.after?.tech?.join(', ') || ch.after?.host"></td>
+                  </tr>
+                </template>
+                <template x-for="c in diff.unchanged ?? []">
+                  <tr>
+                    <td x-text="c.label"></td>
+                    <td><span class="tag tag-same">유지</span></td>
+                    <td style="color:var(--muted);font-size:11px;">Rehost</td>
+                    <td colspan="2" x-text="c.tech?.join(', ')"></td>
+                  </tr>
+                </template>
+                <template x-for="c in diff.removed ?? []">
+                  <tr>
+                    <td x-text="c.label"></td>
+                    <td><span class="tag tag-del">제거</span></td>
+                    <td style="font-size:11px;color:#b85450;">Retire</td>
+                    <td x-text="c.tech?.join(', ')"></td>
+                    <td style="color:var(--muted)">—</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
         </template>
       </div>
 
@@ -1288,13 +1446,32 @@
             <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
             <tbody>
               <tr><td><code>id</code></td><td><span class="help-badge required">필수</span></td><td>파일 내 고유 식별자 (snake_case)</td></tr>
-              <tr><td><code>type</code></td><td><span class="help-badge required">필수</span></td><td>server | database | cache | queue | storage | cdn | loadbalancer | gateway | service | client</td></tr>
+              <tr><td><code>type</code></td><td><span class="help-badge required">필수</span></td><td>server | database | cache | queue | storage | cdn | loadbalancer | gateway | service | client | mainframe | esb | security | monitoring | unknown</td></tr>
               <tr><td><code>label</code></td><td><span class="help-badge required">필수</span></td><td>다이어그램에 표시될 이름</td></tr>
               <tr><td><code>tech</code></td><td><span class="help-badge ai">AI 향상</span></td><td>기술명 + 버전 목록 — 구체적일수록 분석 정확도 향상</td></tr>
               <tr><td><code>host</code></td><td><span class="help-badge required">필수</span></td><td>on-premise | aws | gcp | azure | hybrid</td></tr>
               <tr><td><code>vintage</code></td><td><span class="help-badge ai">AI 향상</span></td><td>컴포넌트 구축/마지막 업그레이드 연도</td></tr>
-              <tr><td><code>criticality</code></td><td><span class="help-badge ai">AI 향상</span></td><td>high | medium | low — 장애 시 비즈니스 영향도</td></tr>
+              <tr><td><code>criticality</code></td><td><span class="help-badge ai">AI 향상</span></td><td>high | medium | low — 장애 시 비즈니스 영향도 (미입력 시 타입으로 자동 추론)</td></tr>
+              <tr><td><code>lifecycle_status</code></td><td><span class="help-badge ai">AI 향상</span></td><td>active | deprecated | eol | planned — 컴포넌트 수명 주기 상태</td></tr>
+              <tr><td><code>data_classification</code></td><td><span class="help-badge ai">AI 향상</span></td><td>public | internal | confidential | restricted — 데이터 민감도</td></tr>
+              <tr><td><code>owner</code></td><td><span class="help-badge opt">선택</span></td><td>담당 팀 또는 담당자 이름</td></tr>
               <tr><td><code>notes</code></td><td><span class="help-badge ai">AI 향상</span></td><td>도메인 전문가 관찰 사항 — pain point로 직접 반영</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <h3>연결(connection) 필드 설명</h3>
+          <table class="help-table">
+            <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>from_id</code></td><td><span class="help-badge required">필수</span></td><td>출발 컴포넌트 id</td></tr>
+              <tr><td><code>to_id</code></td><td><span class="help-badge required">필수</span></td><td>도착 컴포넌트 id</td></tr>
+              <tr><td><code>protocol</code></td><td><span class="help-badge opt">선택</span></td><td>통신 프로토콜 — HTTP | HTTPS | JDBC | gRPC | AMQP | REST | SOAP 등</td></tr>
+              <tr><td><code>label</code></td><td><span class="help-badge opt">선택</span></td><td>연결선에 표시될 설명</td></tr>
+              <tr><td><code>data_format</code></td><td><span class="help-badge ai">AI 향상</span></td><td>데이터 포맷 — JSON | XML | Avro | Protobuf | CSV 등</td></tr>
+              <tr><td><code>api_version</code></td><td><span class="help-badge opt">선택</span></td><td>API 버전 — 예) v1, v2, 2.1</td></tr>
+              <tr><td><code>bidirectional</code></td><td><span class="help-badge opt">선택</span></td><td>true 이면 양방향 화살표 (기본: false)</td></tr>
             </tbody>
           </table>
         </div>
@@ -1339,13 +1516,17 @@
               <tr><td><strong>Server</strong></td><td>파란 둥근 사각형</td><td>fillColor=#dae8fc</td><td>Web Server, App Server</td></tr>
               <tr><td><strong>Database</strong></td><td>실린더 (원통)</td><td>shape=cylinder*, 또는 disk_storage</td><td>MySQL, Oracle, PostgreSQL</td></tr>
               <tr><td><strong>Cache</strong></td><td>노란 타원</td><td>ellipse + fillColor=#fff2cc</td><td>Redis, Memcached</td></tr>
-              <tr><td><strong>Queue</strong></td><td>BPMN 태스크 박스</td><td>shape=mxgraph.bpmn.*</td><td>Kafka, RabbitMQ, SQS</td></tr>
-              <tr><td><strong>Storage</strong></td><td>Cisco 서버 아이콘</td><td>shape=mxgraph.cisco.servers.*</td><td>S3, NAS, 파일 서버</td></tr>
+              <tr><td><strong>Queue</strong></td><td>Flowchart delay 도형</td><td>shape=mxgraph.flowchart.delay + fillColor=#ffe6cc</td><td>Kafka, RabbitMQ, SQS</td></tr>
+              <tr><td><strong>Storage</strong></td><td>Flowchart stored_data 도형</td><td>shape=mxgraph.flowchart.stored_data + fillColor=#f5f5f5</td><td>S3, NAS, 파일 서버</td></tr>
               <tr><td><strong>CDN</strong></td><td>초록 타원</td><td>ellipse + fillColor=#d5e8d4</td><td>CloudFront, Akamai</td></tr>
-              <tr><td><strong>Load Balancer</strong></td><td>주황 마름모</td><td>shape=rhombus</td><td>ELB, ALB, Nginx LB</td></tr>
+              <tr><td><strong>Load Balancer</strong></td><td>분홍 마름모</td><td>shape=rhombus + fillColor=#f8cecc</td><td>ELB, ALB, Nginx LB</td></tr>
               <tr><td><strong>Gateway</strong></td><td>보라 라운드 캡슐</td><td>arcSize=50 + fillColor=#e1d5e7</td><td>API Gateway, Kong</td></tr>
               <tr><td><strong>Service</strong></td><td>초록 둥근 사각형</td><td>fillColor=#d5e8d4</td><td>마이크로서비스</td></tr>
               <tr><td><strong>Client</strong></td><td>Cisco PC 아이콘</td><td>shape=mxgraph.cisco.computers.*</td><td>웹/모바일 클라이언트</td></tr>
+              <tr><td><strong>Mainframe</strong></td><td>남보라 직각 사각형</td><td>rounded=0 + fillColor=#ccccff + fontStyle=1</td><td>IBM z/OS, 메인프레임</td></tr>
+              <tr><td><strong>ESB</strong></td><td>연보라 둥근 사각형</td><td>arcSize=30 + fillColor=#f0d0ff</td><td>IBM MQ, TIBCO, MuleSoft</td></tr>
+              <tr><td><strong>Security</strong></td><td>연빨강 마름모 (결정 기호)</td><td>shape=mxgraph.flowchart.decision + fillColor=#ffe6e6</td><td>WAF, Vault, IAM</td></tr>
+              <tr><td><strong>Monitoring</strong></td><td>연노랑 둥근 사각형</td><td>rounded=1 + fillColor=#fffacd</td><td>Grafana, CloudWatch, Prometheus</td></tr>
             </tbody>
           </table>
           <p style="margin-top:8px; font-size:12px; color:var(--muted);">
@@ -1449,7 +1630,7 @@ Windows Server 2012</div>
           <h3>단계별 흐름</h3>
           <ol style="font-size:13px; line-height:1.9; color:var(--muted); padding-left:1.4em;">
             <li><strong>Step 1 — 시스템 입력:</strong> 표준 YAML로 레거시 시스템 정의</li>
-            <li><strong>Step 2 — AI 분석:</strong> GPT-4o가 pain point, 기술 부채, 위험 영역 자동 식별</li>
+            <li><strong>Step 2 — AI 분석:</strong> AI가 pain point, 기술 부채, 위험 영역 자동 식별</li>
             <li><strong>Step 3 — 현대화 설계:</strong> 요구사항 기술 → 현대화 아키텍처 자동 생성</li>
             <li><strong>Step 4 — 비교 & 발표:</strong> Before/After 비교 + 마이그레이션 로드맵 + 발표 자료</li>
           </ol>
@@ -1684,7 +1865,8 @@ migration_priority: high  # high | medium | low
 
 components:
   - id: web_portal             # snake_case, 파일 내 고유값 *
-    type: server               # server|database|cache|queue|storage|cdn|loadbalancer|gateway|service|client *
+    type: server               # server|database|cache|queue|storage|cdn|loadbalancer
+                               # gateway|service|client|mainframe|esb|security|monitoring *
     label: "웹 포털 (IIS)"     # 다이어그램에 표시될 이름 *
     tech:
       - "IIS 8.5"              # 기술명 + 버전을 함께 기재 (AI 분석 정확도 향상)
@@ -1692,7 +1874,10 @@ components:
       - "Windows Server 2012"
     host: on-premise           # on-premise | aws | gcp | azure | hybrid *
     vintage: 2012              # 컴포넌트 구축/마지막 업그레이드 연도
-    criticality: high          # high | medium | low (장애 시 비즈니스 영향도)
+    criticality: high          # high | medium | low (미입력 시 타입으로 자동 추론)
+    lifecycle_status: active   # active | deprecated | eol | planned
+    data_classification: confidential  # public | internal | confidential | restricted
+    owner: "웹팀"              # 담당 팀 또는 담당자
     notes: "IE11 의존성 높음, 모바일 미지원, 연간 패치 적용 부담"
 
   - id: app_server
@@ -1705,6 +1890,9 @@ components:
     host: on-premise
     vintage: 2008
     criticality: high
+    lifecycle_status: active
+    data_classification: restricted
+    owner: "코어뱅킹팀"
     notes: "핵심 비즈니스 로직 집중, 연간 기능 변경 200건+"
 
   - id: db_main
@@ -1716,6 +1904,9 @@ components:
     host: on-premise
     vintage: 2010
     criticality: high
+    lifecycle_status: deprecated
+    data_classification: restricted
+    owner: "DBA팀"
     notes: "라이선스 비용 연 3억, 업그레이드 일정 미정"
 
 connections:
@@ -1723,9 +1914,12 @@ connections:
     to_id: app_server
     protocol: "HTTP/SOAP"
     label: "ESB 경유 동기 호출"
+    data_format: "XML"         # JSON | XML | Avro | Protobuf | CSV 등
+    api_version: "v1"
   - from_id: app_server
     to_id: db_main
     protocol: "JDBC"
+    data_format: "SQL"
 `,
 
     get currentMmd() {

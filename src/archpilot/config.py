@@ -2,8 +2,12 @@
 
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 전역 설정 디렉토리: ~/.archpilot/
+GLOBAL_CONFIG_DIR = Path.home() / ".archpilot"
+GLOBAL_ENV_FILE = GLOBAL_CONFIG_DIR / "config.env"
 
 
 class ConfigError(Exception):
@@ -19,7 +23,7 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("OPENAI_API_KEY", "ARCHPILOT_OPENAI_API_KEY"),
     )
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-4o-mini"
     openai_max_tokens: int = 4096
 
     # Output
@@ -31,11 +35,18 @@ class Settings(BaseSettings):
     server_port: int = 8080
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # 전역 설정 → 로컬 .env 순서로 로드 (로컬이 전역을 오버라이드)
+        env_file=(GLOBAL_ENV_FILE, ".env"),
         env_prefix="ARCHPILOT_",
         extra="ignore",
         env_ignore_empty=True,
     )
+
+    @field_validator("output_dir", mode="after")
+    @classmethod
+    def _resolve_output_dir(cls, v: Path) -> Path:
+        """상대 경로를 절대 경로로 변환 — 실행 위치에 무관하게 동일한 경로 보장."""
+        return v.expanduser().resolve()
 
     def require_api_key(self) -> None:
         """API 키 미설정 시 ConfigError를 raise한다.

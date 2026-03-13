@@ -12,13 +12,30 @@ from archpilot.core.models import (
     Component,
     ComponentType,
     Connection,
+    Criticality,
+    DataClassification,
     HostType,
+    LifecycleStatus,
     SystemModel,
 )
 
 
 class ParseError(Exception):
     """파싱 실패 시 발생."""
+
+
+def normalize_connections(data: dict) -> None:
+    """LLM/외부 입력의 connections 키를 parser 규격으로 정규화 (in-place).
+
+    'from'/'to' → 'from_id'/'to_id' 로 통일.
+    _parse_connection이 양쪽을 모두 수용하지만, 미리 정규화하면
+    YAML 덤프·직렬화 결과도 일관성 있는 스키마를 유지한다.
+    """
+    for conn in data.get("connections", []):
+        if "from" in conn and "from_id" not in conn:
+            conn["from_id"] = conn.pop("from")
+        if "to" in conn and "to_id" not in conn:
+            conn["to_id"] = conn.pop("to")
 
 
 class SystemParser:
@@ -72,6 +89,7 @@ class SystemParser:
             raise ParseError("'name' 필드가 필요합니다.")
         if not data.get("components"):
             raise ParseError("'components' 목록이 비어있거나 없습니다.")
+        normalize_connections(data)
 
         from archpilot.core.tech_ontology import enrich_component  # noqa: PLC0415
         raw_comps = [enrich_component(dict(c)) for c in data["components"]]
@@ -93,7 +111,11 @@ class SystemParser:
         )
 
     # Component 가 직접 처리하는 필드
-    _COMP_KNOWN = {"id", "type", "label", "tech", "host", "specs", "metadata"}
+    _COMP_KNOWN = {
+        "id", "type", "label", "tech", "host",
+        "criticality", "lifecycle_status", "data_classification", "owner",
+        "specs", "metadata",
+    }
 
     def _parse_component(self, raw: dict) -> Component:
         required = ("id", "type", "label")
@@ -113,7 +135,33 @@ class SystemParser:
         except ValueError:
             host = HostType.ON_PREMISE
 
-        # vintage / criticality / notes 등 확장 필드를 metadata에 병합
+        # criticality — 문자열이면 enum으로 변환, 실패하면 기본값
+        criticality = Criticality.MEDIUM
+        if raw.get("criticality"):
+            try:
+                criticality = Criticality(str(raw["criticality"]).lower())
+            except ValueError:
+                pass
+
+        # lifecycle_status
+        lifecycle_status = LifecycleStatus.ACTIVE
+        if raw.get("lifecycle_status"):
+            try:
+                lifecycle_status = LifecycleStatus(str(raw["lifecycle_status"]).lower())
+            except ValueError:
+                pass
+
+        # data_classification
+        data_classification: DataClassification | None = None
+        if raw.get("data_classification"):
+            try:
+                data_classification = DataClassification(str(raw["data_classification"]).lower())
+            except ValueError:
+                pass
+
+        owner: str = raw.get("owner", "") or ""
+
+        # 나머지 비표준 필드(vintage, notes 등)를 metadata에 병합
         extra = {k: v for k, v in raw.items() if k not in self._COMP_KNOWN}
         metadata = {**raw.get("metadata", {}), **extra}
 
@@ -123,9 +171,20 @@ class SystemParser:
             label=raw["label"],
             tech=raw.get("tech", []),
             host=host,
+            criticality=criticality,
+            lifecycle_status=lifecycle_status,
+            data_classification=data_classification,
+            owner=owner,
             specs=raw.get("specs", {}),
             metadata=metadata,
         )
+
+    # Connection 이 직접 처리하는 필드
+    _CONN_KNOWN = {
+        "from", "from_id", "to", "to_id",
+        "protocol", "label", "bidirectional",
+        "data_format", "api_version", "metadata",
+    }
 
     def _parse_connection(self, raw: dict) -> Connection:
         from_id = raw.get("from") or raw.get("from_id")
@@ -138,5 +197,7 @@ class SystemParser:
             protocol=raw.get("protocol", "HTTP"),
             label=raw.get("label", ""),
             bidirectional=raw.get("bidirectional", False),
+            data_format=raw.get("data_format", "") or "",
+            api_version=raw.get("api_version", "") or "",
             metadata=raw.get("metadata", {}),
         )

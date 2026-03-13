@@ -25,6 +25,11 @@ ARCHPILOT_SHAPES: list[dict] = [
     {"name": "Gateway",       "type": ComponentType.GATEWAY,      "w": 140, "h": 60},
     {"name": "Service",       "type": ComponentType.SERVICE,      "w": 140, "h": 60},
     {"name": "Client",        "type": ComponentType.CLIENT,       "w": 60,  "h": 80},
+    # 엔터프라이즈 컴포넌트
+    {"name": "Mainframe",     "type": ComponentType.MAINFRAME,    "w": 140, "h": 80},
+    {"name": "ESB",           "type": ComponentType.ESB,          "w": 160, "h": 60},
+    {"name": "Security",      "type": ComponentType.SECURITY,     "w": 80,  "h": 80},
+    {"name": "Monitoring",    "type": ComponentType.MONITORING,   "w": 140, "h": 60},
 ]
 
 

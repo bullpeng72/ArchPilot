@@ -1,6 +1,6 @@
 # ArchPilot — 기능 명세 (SPEC)
 
-버전: 0.2.0
+버전: 0.2.1
 최종 수정: 2026-03-13
 
 ---
@@ -73,7 +73,8 @@ connections:                    # 선택.
 
 ```
 server | database | cache | queue | storage |
-cdn | loadbalancer | gateway | service | client | unknown
+cdn | loadbalancer | gateway | service | client |
+mainframe | esb | security | monitoring | unknown
 ```
 
 #### 2.1.4 Host Enum
@@ -110,9 +111,12 @@ archpilot ingest <file>
 
 | 항목 | 설명 |
 |------|------|
+| `health_score` | 시스템 건강 점수 0~100 (EOL/보안/토폴로지 기반 자동 계산) |
 | `pain_points` | 현상 → 근본 원인 → 비즈니스 영향 구조의 문제점 목록 (최소 5개) |
 | `tech_debt` | 기술 부채 항목 — EOL/EOS 날짜, CVE, 마이그레이션 복잡도 포함 (최소 4개) |
 | `risk_areas` | 고위험 컴포넌트 — 발생 가능성·피해 규모, 단기/장기 대응 구분 (최소 4개) |
+| `compliance_gaps` | 규제·컴플라이언스 갭 (PCI-DSS/HIPAA/SOC2 위반 사항) |
+| `security_findings` | 보안 취약점 및 위험 목록 (암호화 부재, 네트워크 노출, 인증 취약점 등) |
 | `modernization_opportunities` | 현재→목표 기술 스택 대비, 기대 효과 수치 포함 (최소 5개) |
 | `recommended_patterns` | 권장 아키텍처 패턴 및 선택 근거 (최소 4개) |
 | `estimated_effort` | 난이도 및 예상 공수 (S/M/L/XL) |
@@ -235,8 +239,10 @@ archpilot export <system.json>
 archpilot init
 ```
 
-- `.env` 파일 생성 마법사 (OPENAI_API_KEY 입력 프롬프트)
-- 이미 `.env` 존재 시 덮어쓰기 여부 확인
+- `~/.archpilot/config.env` 전역 설정 파일 생성 마법사 (OPENAI_API_KEY 입력 프롬프트)
+- `ARCHPILOT_OUTPUT_DIR`을 절대 경로로 저장 (기본: `CWD/output`)
+- 이미 설정 파일 존재 시 덮어쓰기 여부 확인
+- 로컬 `.env`가 있으면 전역 설정을 오버라이드
 
 ---
 
@@ -300,7 +306,7 @@ archpilot init
 ### 3.3 호환성
 
 - OS: macOS, Linux, Windows
-- Python: 3.11, 3.12
+- Python: 3.11, 3.12, 3.13
 - diagrams 라이브러리: Graphviz 설치 필요 (문서 안내)
 
 ### 3.4 보안
@@ -330,13 +336,17 @@ class SystemModel(BaseModel):
 
 ```python
 class Component(BaseModel):
-    id: str                          # snake_case, 시스템 내 고유
+    id: str                                      # snake_case, 시스템 내 고유
     type: ComponentType
     label: str
     tech: list[str] = []
     host: HostType = HostType.ON_PREMISE
+    criticality: CriticalityLevel = CriticalityLevel.MEDIUM   # HIGH | MEDIUM | LOW
+    lifecycle_status: LifecycleStatus = LifecycleStatus.ACTIVE # active | deprecated | eol | planned
+    data_classification: DataClassification = DataClassification.INTERNAL # public | internal | confidential | restricted
+    owner: str = ""                              # 담당 팀/시스템 오너
     specs: dict[str, Any] = {}
-    metadata: dict[str, Any] = {}   # is_new, removed, reason 등 LLM 메타데이터
+    metadata: dict[str, Any] = {}               # is_new, removed, reason, strategy, replaces 등 LLM 메타데이터
 ```
 
 ### 4.3 Connection
@@ -348,6 +358,8 @@ class Connection(BaseModel):
     protocol: str = "HTTP"
     label: str = ""
     bidirectional: bool = False
+    data_format: str = ""            # JSON | XML | binary | CSV 등
+    api_version: str = ""            # "v2", "3.1" 등 API 버전
     metadata: dict[str, Any] = {}
 ```
 
@@ -356,13 +368,17 @@ class Connection(BaseModel):
 ```python
 class AnalysisResult(BaseModel):
     system_name: str
-    analyzed_at: datetime
-    pain_points: list[str]
-    tech_debt: list[TechDebtItem]
-    risk_areas: list[RiskArea]
-    modernization_opportunities: list[Opportunity]
-    recommended_patterns: list[str]
-    estimated_effort: EffortLevel   # S | M | L | XL
+    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    health_score: int = 75           # 0(위험) ~ 100(건강)
+    pain_points: list[str] = []
+    tech_debt: list[TechDebtItem] = []
+    risk_areas: list[RiskArea] = []
+    modernization_opportunities: list[Opportunity] = []
+    compliance_gaps: list[str] = []  # 규제·컴플라이언스 갭
+    security_findings: list[str] = []  # 보안 취약점·위험 목록
+    recommended_patterns: list[str] = []
+    estimated_effort: EffortLevel = EffortLevel.M   # S | M | L | XL
+    summary: str = ""
 ```
 
 ---
@@ -394,7 +410,19 @@ class AnalysisResult(BaseModel):
 
 - **모델**: gpt-4o
 - **응답 형식**: Markdown
-- **포함 항목**: 완료 기준, 의존성, 롤백 계획, KPI, 위험 매트릭스
+- **최대 토큰**: 6000
+- **포함 항목** (11개 섹션):
+  1. 경영진 요약 (Executive Summary) — 현재 문제·기대 효과·비용 절감 수치
+  2. 현대화 아키텍처 개요 — Legacy/Modern 컴포넌트 대비표 + 전환 전략
+  3. 단계별 마이그레이션 로드맵 — Phase별 목표·주요 작업·담당자·기간
+  4. 컴포넌트 전환 매핑 — 컴포넌트별 전략(Replace/Refactor/Replatform/Rehost)·담당·위험도
+  5. 데이터 마이그레이션 계획 — Full Load/CDC/Dual-write 방식·DMS/Debezium·PII 처리·롤백
+  6. 보안·규제 준수 계획 — compliance_gaps 해소 방안·security_findings 대응·보안 아키텍처
+  7. CI/CD 파이프라인 구축 — 소스 관리·컨테이너 빌드·배포 파이프라인·IaC
+  8. 위험 관리 매트릭스 — risk_areas 기반 발생 가능성·피해 규모·대응 방안·Phase
+  9. 성공 기준 및 KPI — 완료 기준·성능 목표·비용 KPI
+  10. 팀 역량 및 교육 계획 — 스킬 갭·자격증·변화 관리
+  11. 롤백 계획 — Blue/Green·Canary 배포 전략
 
 ---
 
@@ -430,7 +458,7 @@ class BaseRenderer(ABC):
 ### 6.4 draw.io 렌더러
 
 - 출력: mxGraph XML 형식
-- ComponentType별 shape 스타일 매핑 (10종)
+- ComponentType별 shape 스타일 매핑 (14종): server, database, cache, queue, storage, cdn, loadbalancer, gateway, service, client, mainframe, esb, security, monitoring
 - 호스트별 swimlane 그룹핑
 - 자동 격자 배치
 
@@ -464,7 +492,7 @@ class BaseRenderer(ABC):
 ```toml
 [project]
 name = "archpilot"
-version = "0.2.0"
+version = "0.2.1"
 requires-python = ">=3.11"
 dependencies = [
     "typer[all]>=0.12",
@@ -496,7 +524,7 @@ tag v*.*.* → ruff + mypy → pytest → build wheel → upload to PyPI (Prod)
 
 ---
 
-## 9. 미지원 범위 (v0.2.0)
+## 9. 미지원 범위 (v0.2.1)
 
 - PlantUML / C4 모델 출력
 - 실시간 협업 편집

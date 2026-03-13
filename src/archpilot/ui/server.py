@@ -13,7 +13,10 @@ from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from pydantic import BaseModel
 
-from archpilot.core.models import AnalysisResult, SystemModel
+from archpilot.config import settings
+from archpilot.core.models import (
+    AnalysisResult, Criticality, DataClassification, LifecycleStatus, SystemModel,
+)
 from archpilot.core.parser import ParseError, SystemParser
 from archpilot.renderers.mermaid import MermaidRenderer
 from archpilot.renderers.drawio import DrawioRenderer
@@ -124,9 +127,13 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
 
         # mode 자동 감지
         if mode == "auto":
-            if content.startswith("{") or content.startswith("["):
+            stripped = content.strip()
+            if stripped.startswith("{") or stripped.startswith("["):
                 mode = "json"
-            elif ":" in content and ("\n" in content or content.count(":") > 1):
+            elif (stripped.startswith("---")
+                  or (":" in stripped
+                      and ("\n" in stripped or stripped.count(":") > 1)
+                      and not stripped.startswith("http"))):
                 mode = "yaml"
             else:
                 mode = "text"
@@ -135,17 +142,10 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
             parser = SystemParser()
             if mode == "text":
                 model = parser.from_text(content)
-            else:
-                import tempfile, os
-                suffix = ".yaml" if mode == "yaml" else ".json"
-                with tempfile.NamedTemporaryFile(mode="w", suffix=suffix,
-                                                 delete=False, encoding="utf-8") as f:
-                    f.write(content)
-                    tmp_path = Path(f.name)
-                try:
-                    model = parser.from_file(tmp_path, use_llm=False)
-                finally:
-                    os.unlink(tmp_path)
+            elif mode == "yaml":
+                model = parser._from_yaml(content, Path("<web>"))
+            else:  # json
+                model = parser._from_json(content, Path("<web>"))
         except ParseError as e:
             raise HTTPException(status_code=422, detail=str(e))
         except Exception as e:
@@ -191,6 +191,8 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
             mode = "yaml"
         elif filename.endswith(".json"):
             mode = "json"
+        elif filename.endswith(".txt"):
+            mode = "text"
         else:
             mode = "auto"
         req = IngestRequest(content=content, mode=mode)
@@ -214,26 +216,59 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
 
         # ── 기존 세션의 semantic 메타데이터 보존 ────────────────────────────
         # draw.io XML은 구조(컴포넌트·연결·호스트)만 담으므로
-        # 이전 분석에서 얻은 domain·vintage·scale·compliance·known_issues 등을
-        # 새 모델에 병합한다. 새 값이 있으면 새 값이 우선한다.
+        # 이전 세션에서 얻은 메타데이터와 enterprise typed 필드를 복원한다.
+        # 새 값이 있으면 새 값이 우선한다.
         if s.system:
             prev_sys_meta = s.system.get("metadata", {})
             if prev_sys_meta:
                 merged_meta = {**prev_sys_meta, **model.metadata}
                 model = model.model_copy(update={"metadata": merged_meta})
 
-            prev_comp_meta: dict[str, dict] = {
-                c["id"]: c.get("metadata", {})
-                for c in s.system.get("components", [])
+            prev_comps: dict[str, dict] = {
+                c["id"]: c for c in s.system.get("components", [])
             }
-            if prev_comp_meta:
+            if prev_comps:
                 updated = []
                 for comp in model.components:
-                    prev = prev_comp_meta.get(comp.id, {})
-                    if prev:
-                        merged = {**prev, **comp.metadata}  # 새 값 우선
-                        comp = comp.model_copy(update={"metadata": merged})
-                    updated.append(comp)
+                    prev = prev_comps.get(comp.id)
+                    if not prev:
+                        updated.append(comp)
+                        continue
+
+                    patch: dict = {}
+
+                    # metadata dict 병합 (새 값 우선)
+                    patch["metadata"] = {**prev.get("metadata", {}), **comp.metadata}
+
+                    # draw.io로 표현 불가한 enterprise typed 필드 복원
+                    # — 재임포트 후 기본값인 경우에만 이전 값으로 덮어씀
+                    if (comp.criticality == Criticality.MEDIUM
+                            and prev.get("criticality") not in (None, "medium")):
+                        try:
+                            patch["criticality"] = Criticality(prev["criticality"])
+                        except ValueError:
+                            pass
+
+                    if (comp.lifecycle_status == LifecycleStatus.ACTIVE
+                            and prev.get("lifecycle_status") not in (None, "active")):
+                        try:
+                            patch["lifecycle_status"] = LifecycleStatus(prev["lifecycle_status"])
+                        except ValueError:
+                            pass
+
+                    # data_classification·owner 는 draw.io에 인코딩 자체가 불가하므로 항상 복원
+                    if comp.data_classification is None and prev.get("data_classification"):
+                        try:
+                            patch["data_classification"] = DataClassification(
+                                prev["data_classification"]
+                            )
+                        except ValueError:
+                            pass
+
+                    if not comp.owner and prev.get("owner"):
+                        patch["owner"] = prev["owner"]
+
+                    updated.append(comp.model_copy(update=patch))
                 model = model.model_copy(update={"components": updated})
         # ────────────────────────────────────────────────────────────────────
 
@@ -291,13 +326,7 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
                         result = json.loads(clean)
                         if result.get("__system__"):
                             system_dict = {k: v for k, v in result.items() if k != "__system__"}
-                            # connections 정규화
-                            for conn in system_dict.get("connections", []):
-                                if "from" in conn and "from_id" not in conn:
-                                    conn["from_id"] = conn.pop("from")
-                                if "to" in conn and "to_id" not in conn:
-                                    conn["to_id"] = conn.pop("to")
-
+                            # normalize_connections는 _dict_to_model 내부에서 자동 처리
                             from archpilot.core.parser import SystemParser
                             model = SystemParser()._dict_to_model(system_dict)
                             legacy_mmd = MermaidRenderer().render(model)
@@ -355,13 +384,25 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
             try:
                 yield _sse({"type": "progress", "pct": 5, "msg": "분석을 시작합니다..."})
 
+                # 대형 시스템 컨텍스트 초과 방지 (analyzer.py와 동일 로직)
+                _MAX_PAYLOAD_CHARS = 24_000
                 payload = json.dumps(s.system, ensure_ascii=False, indent=2)
+                if len(payload) > _MAX_PAYLOAD_CHARS:
+                    compact = json.dumps(s.system, ensure_ascii=False)
+                    if len(compact) > _MAX_PAYLOAD_CHARS:
+                        d = json.loads(compact)
+                        for c in d.get("components", []):
+                            c.pop("metadata", None)
+                            c.pop("specs", None)
+                        compact = json.dumps(d, ensure_ascii=False)
+                    payload = compact
+
                 user_msg = f"분석할 시스템:\n{payload}"
 
                 client = get_async_client()
                 full_text = ""
 
-                yield _sse({"type": "progress", "pct": 15, "msg": "GPT-4o가 시스템을 분석하고 있습니다..."})
+                yield _sse({"type": "progress", "pct": 15, "msg": f"{settings.openai_model}이 시스템을 분석하고 있습니다..."})
 
                 async for chunk in client.stream_chat(
                     ANALYZE_SYSTEM_PROMPT + "\nIMPORTANT: Output ONLY raw JSON, no markdown fences.",
@@ -408,6 +449,23 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
             try:
                 yield _sse({"type": "progress", "pct": 5, "msg": "현대화 설계를 시작합니다..."})
 
+                # 레거시 시스템 페이로드 압축
+                _MAX_SYSTEM_CHARS = 20_000
+                _MAX_PLAN_CHARS = 10_000
+
+                def _compress(system_dict: dict, max_chars: int) -> str:
+                    payload = json.dumps(system_dict, ensure_ascii=False, indent=2)
+                    if len(payload) <= max_chars:
+                        return payload
+                    compact = json.dumps(system_dict, ensure_ascii=False)
+                    if len(compact) <= max_chars:
+                        return compact
+                    d = json.loads(compact)
+                    for c in d.get("components", []):
+                        c.pop("metadata", None)
+                        c.pop("specs", None)
+                    return json.dumps(d, ensure_ascii=False)
+
                 analysis_section = ""
                 if s.analysis:
                     analysis_section = f"\n\n분석 결과:\n{json.dumps(s.analysis, ensure_ascii=False)}"
@@ -415,7 +473,7 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
                 user_msg = (
                     f"현대화 요구사항:\n{req.requirements}"
                     f"{analysis_section}"
-                    f"\n\nLegacy 시스템:\n{json.dumps(s.system, ensure_ascii=False, indent=2)}"
+                    f"\n\nLegacy 시스템:\n{_compress(s.system, _MAX_SYSTEM_CHARS)}"
                 )
 
                 client = get_async_client()
@@ -432,28 +490,24 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
 
                 yield _sse({"type": "progress", "pct": 60, "msg": "시스템 모델을 파싱하고 있습니다..."})
 
-                # 파싱 & connections 정규화
+                # 파싱 (normalize_connections는 _dict_to_model 내부에서 자동 처리)
                 clean = _clean_json(full_text)
                 modern_dict = json.loads(clean)
-                for conn in modern_dict.get("connections", []):
-                    if "from" in conn and "from_id" not in conn:
-                        conn["from_id"] = conn.pop("from")
-                    if "to" in conn and "to_id" not in conn:
-                        conn["to_id"] = conn.pop("to")
-
                 modern_model = SystemParser()._dict_to_model(modern_dict)
 
                 # 다이어그램 생성
                 modern_mmd = MermaidRenderer().render(modern_model)
                 modern_drawio = DrawioRenderer().render(modern_model)
 
-                # ② 마이그레이션 플랜 생성
+                # ② 마이그레이션 플랜 생성 — 분석 결과 + 압축 페이로드 포함
                 yield _sse({"type": "progress", "pct": 70, "msg": "마이그레이션 플랜을 작성하고 있습니다..."})
                 plan_user_msg = (
                     f"요구사항: {req.requirements}\n\n"
-                    f"레거시:\n{json.dumps(s.system, ensure_ascii=False)}\n\n"
-                    f"현대화:\n{json.dumps(json.loads(modern_model.model_dump_json()), ensure_ascii=False)}"
+                    f"레거시:\n{_compress(s.system, _MAX_PLAN_CHARS)}\n\n"
+                    f"현대화:\n{_compress(json.loads(modern_model.model_dump_json()), _MAX_PLAN_CHARS)}"
                 )
+                if s.analysis:
+                    plan_user_msg += f"\n\n분석 결과:\n{json.dumps(s.analysis, ensure_ascii=False)}"
                 plan_text = ""
                 async for chunk in client.stream_chat(
                     MIGRATION_PLAN_PROMPT, plan_user_msg

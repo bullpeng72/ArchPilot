@@ -1,6 +1,6 @@
 # ArchPilot — 입력 표준화 및 기술 온톨로지
 
-버전: 0.2.0
+버전: 0.2.1
 최종 수정: 2026-03-13
 
 ---
@@ -36,7 +36,7 @@ class SystemModel(BaseModel):
 ```python
 class Component(BaseModel):
     id: str                          # 시스템 내 고유 snake_case 식별자
-    type: ComponentType              # server|database|cache|queue|... (11종)
+    type: ComponentType              # server|database|cache|queue|... (15종)
     label: str                       # 사람이 읽기 쉬운 이름
     tech: list[str]                  # 기술 스택 목록 (["MySQL 5.7", "Java 11"])
     host: HostType                   # on-premise|aws|gcp|azure|hybrid
@@ -53,7 +53,7 @@ class Connection(BaseModel):
     bidirectional: bool              # 양방향 여부
 ```
 
-### ComponentType 열거형 (11종)
+### ComponentType 열거형 (15종)
 
 | 값 | 의미 | 예시 |
 |---|---|---|
@@ -67,6 +67,10 @@ class Connection(BaseModel):
 | `gateway` | API 게이트웨이 | Kong, API Gateway, Zuul |
 | `service` | 마이크로서비스 | 도메인별 서비스 단위 |
 | `client` | 클라이언트 | React SPA, Flutter 앱 |
+| `mainframe` | 메인프레임 | IBM z/OS, AS/400 |
+| `esb` | 엔터프라이즈 서비스 버스 | MuleSoft, IBM DataPower, TIBCO |
+| `security` | 보안 컴포넌트 | WAF, KMS, HSM, IAM |
+| `monitoring` | 모니터링/관측 | Prometheus, Datadog, CloudWatch |
 | `unknown` | 미분류 | 불명확한 컴포넌트 |
 
 ### HostType 열거형 (5종)
@@ -97,7 +101,7 @@ class TechRecord:
     eol_year: Optional[int] # EOL 연도 (None = 현재 지원 중)
 ```
 
-### 온톨로지 테이블 범위 (v0.2.0 기준, 총 70+ 엔트리)
+### 온톨로지 테이블 범위 (v0.2.1 기준, 총 70+ 엔트리)
 
 | 카테고리 | 포함 기술 |
 |---|---|

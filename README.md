@@ -1,6 +1,6 @@
 # ArchPilot
 
-![version](https://img.shields.io/badge/version-0.2.0-blue)
+![version](https://img.shields.io/badge/version-0.2.1-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -69,6 +69,12 @@ archpilot drawio export <file>        draw.io → system.json 변환
 - draw.io Desktop (drawio 통합 기능 사용 시)
 
 ## 변경 이력
+
+### v0.2.1 (2026-03-13)
+
+- 실행 위치 독립성 개선: 전역 설정 `~/.archpilot/config.env` 도입
+- `archpilot init`이 어느 디렉토리에서든 동일하게 동작
+- 모든 `--output` 옵션이 `settings.output_dir` (절대 경로) 기준으로 동작
 
 ### v0.2.0 (2026-03-13)
 

@@ -13,7 +13,10 @@ from archpilot.core.models import (
     Component,
     ComponentType,
     Connection,
+    Criticality,
+    DataClassification,
     HostType,
+    LifecycleStatus,
     SystemModel,
 )
 
@@ -95,13 +98,35 @@ def _style_to_type(style: str) -> ComponentType:
         # 색상 정보 없는 일반 타원 → SERVER (CACHE보다 안전한 기본값)
         return ComponentType.SERVER
 
+    # ── SECURITY: flowchart.decision 다이아몬드 (LOADBALANCER rhombus와 구분) ────
+    if "flowchart.decision" in s:
+        return ComponentType.SECURITY
+
+    # ── LOADBALANCER: rhombus ────────────────────────────────────────────────
+    # (위에서 flowchart.decision 먼저 처리했으므로 여기서 rhombus는 LB만 해당)
+    if "rhombus" in s:
+        return ComponentType.LOADBALANCER
+
     # ── Gateway: arcSize=50 + 보라색 ──────────────────────────────────────────
     if "arcsize=50" in s or ("e1d5e7" in s and "9673a6" in s):
         return ComponentType.GATEWAY
-    # Service: 초록색 사각형
+
+    # ── ESB: arcSize=30 + 연보라 (#f0d0ff / #9933cc) ─────────────────────────
+    if "arcsize=30" in s or "f0d0ff" in s or "9933cc" in s:
+        return ComponentType.ESB
+
+    # ── MAINFRAME: 남보라 (#ccccff / #3333cc) + 직각(rounded=0) ──────────────
+    if "ccccff" in s or "3333cc" in s:
+        return ComponentType.MAINFRAME
+
+    # ── MONITORING: 연노랑 (#fffacd / #d4ac0d) ───────────────────────────────
+    if "fffacd" in s or "d4ac0d" in s:
+        return ComponentType.MONITORING
+
+    # ── Service: 초록색 사각형 ─────────────────────────────────────────────────
     if "d5e8d4" in s or "82b366" in s:
         return ComponentType.SERVICE
-    # Server: 파란색 사각형 (ArchPilot 기본)
+    # ── Server: 파란색 사각형 (ArchPilot 기본) ────────────────────────────────
     if "dae8fc" in s or "6c8ebf" in s:
         return ComponentType.SERVER
     return ComponentType.SERVER
@@ -145,6 +170,18 @@ def _label_to_host(label: str, cell_id: str = "") -> HostType:
 
 
 # ── 유틸 ──────────────────────────────────────────────────────────────────────
+
+def _parse_edge_label(label: str) -> tuple[str, str]:
+    """엣지 레이블 'PROTOCOL [DATA_FORMAT]' → (protocol, data_format) 분리.
+
+    DrawioRenderer가 생성한 'CICS [Fixed-Width]' 형식과
+    레이블만 있는 'REST' 형식 모두 처리한다.
+    """
+    m = re.match(r"^(.*?)\s*\[([^\]]+)\]\s*$", label.strip())
+    if m:
+        return (m.group(1).strip() or "HTTP"), m.group(2).strip()
+    return (label.strip() or "HTTP"), ""
+
 
 def _safe_id(raw: str) -> str:
     """mxCell id를 유효한 snake_case 식별자로 변환."""
@@ -255,12 +292,30 @@ def parse_drawio_xml(xml_str: str, system_name: str = "Imported System") -> Syst
         except ValueError:
             ctype = ComponentType.SERVER
 
+        # lifecycle_status — enrich_component가 설정했을 수 있음
+        lifecycle_status = LifecycleStatus.ACTIVE
+        if raw.get("lifecycle_status"):
+            try:
+                lifecycle_status = LifecycleStatus(str(raw["lifecycle_status"]).lower())
+            except ValueError:
+                pass
+
+        # criticality — enrich_component가 설정했을 수 있음
+        criticality = Criticality.MEDIUM
+        if raw.get("criticality"):
+            try:
+                criticality = Criticality(str(raw["criticality"]).lower())
+            except ValueError:
+                pass
+
         components.append(Component(
             id=final_id,
             type=ctype,
             label=raw["label"],
             tech=raw["tech"],
             host=host,
+            lifecycle_status=lifecycle_status,
+            criticality=criticality,
             metadata=raw.get("metadata", {}),
         ))
 
@@ -282,11 +337,13 @@ def parse_drawio_xml(xml_str: str, system_name: str = "Imported System") -> Syst
         if not src or not tgt:
             continue  # dangling edge 무시
 
-        proto = _strip_html(cell.get("value", "")).strip() or "HTTP"
+        raw_label = _strip_html(cell.get("value", "")).strip()
+        proto, data_fmt = _parse_edge_label(raw_label)
         connections.append(Connection(
             from_id=src,
             to_id=tgt,
             protocol=proto,
+            data_format=data_fmt,
         ))
 
     return SystemModel(

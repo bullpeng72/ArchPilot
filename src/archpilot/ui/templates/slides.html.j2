@@ -321,15 +321,24 @@
 {% if analysis %}
 <section>
   <section>
-    <h2>🔍 분석 결과</h2>
+    <h2>🔍 분석 결과 요약</h2>
     <p style="font-size:0.75em; margin-bottom:0.7em;">{{ analysis.summary }}</p>
     <table class="diff-table summary-table">
       <tr><th>항목</th><th>내용</th></tr>
+      {% if analysis.health_score is defined %}
+      <tr><td>시스템 건강도</td><td><strong>{{ analysis.health_score }}/100</strong></td></tr>
+      {% endif %}
       <tr><td>예상 공수</td><td><strong>{{ analysis.estimated_effort.value }}</strong></td></tr>
       <tr><td>주요 문제점</td><td>{{ analysis.pain_points|length }}건</td></tr>
       <tr><td>기술 부채</td><td>{{ analysis.tech_debt|length }}건</td></tr>
       <tr><td>위험 영역</td><td>{{ analysis.risk_areas|length }}건</td></tr>
-      <tr><td>권장 패턴</td><td>{{ analysis.recommended_patterns[:4]|join(', ') }}</td></tr>
+      {% if analysis.compliance_gaps %}
+      <tr><td>규제 갭</td><td style="color:#c0392b;">{{ analysis.compliance_gaps|length }}건</td></tr>
+      {% endif %}
+      {% if analysis.security_findings %}
+      <tr><td>보안 취약점</td><td style="color:#c0392b;">{{ analysis.security_findings|length }}건</td></tr>
+      {% endif %}
+      <tr><td>권장 패턴</td><td>{{ analysis.recommended_patterns[:3]|join(' / ') }}</td></tr>
     </table>
   </section>
 
@@ -339,6 +348,50 @@
     <ul class="analysis-list">
       {% for p in analysis.pain_points %}
       <li>{{ p }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if analysis.tech_debt %}
+  <section>
+    <h2>🔧 기술 부채</h2>
+    <ul class="analysis-list">
+      {% for td in analysis.tech_debt %}
+      <li><strong>[{{ td.severity|upper }}] {{ td.component_id }}</strong>: {{ td.description }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if analysis.compliance_gaps or analysis.security_findings %}
+  <section>
+    {% if analysis.compliance_gaps %}
+    <h2>📋 규제 컴플라이언스 갭</h2>
+    <ul class="analysis-list">
+      {% for g in analysis.compliance_gaps %}
+      <li>{{ g }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if analysis.security_findings %}
+    <h2 style="margin-top:0.8em;">🔒 보안 취약점</h2>
+    <ul class="analysis-list">
+      {% for f in analysis.security_findings %}
+      <li>{{ f }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if analysis.risk_areas %}
+  <section>
+    <h2>🚨 위험 영역</h2>
+    <ul class="analysis-list">
+      {% for r in analysis.risk_areas %}
+      <li><strong>{{ r.component_id }}</strong>: {{ r.risk }}<br>
+          <em style="font-size:0.85em; color:#aaa;">{{ r.mitigation }}</em></li>
       {% endfor %}
     </ul>
   </section>

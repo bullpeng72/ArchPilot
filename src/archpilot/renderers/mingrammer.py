@@ -13,8 +13,8 @@ from archpilot.renderers.base import BaseRenderer
 # (type, host, tech_keyword) → diagrams 완전 클래스 경로
 # 우선순위: 더 구체적인 항목이 앞에 위치해야 함
 ICON_TABLE: list[tuple[tuple[str, str, str], str]] = [
-    # AWS compute
-    (("server",  "aws", "lambda"),     "diagrams.aws.compute.Lambda"),
+    # AWS compute — serverless/managed → service type; raw compute → server type
+    (("service", "aws", "lambda"),     "diagrams.aws.compute.Lambda"),
     (("server",  "aws", "ec2"),        "diagrams.aws.compute.EC2"),
     (("service", "aws", "ecs"),        "diagrams.aws.compute.ECS"),
     (("service", "aws", "eks"),        "diagrams.aws.compute.EKS"),
@@ -36,13 +36,21 @@ ICON_TABLE: list[tuple[tuple[str, str, str], str]] = [
     (("queue",   "aws", "sqs"),        "diagrams.aws.integration.SQS"),
     (("service", "aws", "sns"),        "diagrams.aws.integration.SNS"),
     # GCP compute
-    (("server",  "gcp", "function"),   "diagrams.gcp.compute.Functions"),
+    (("service", "gcp", "function"),   "diagrams.gcp.compute.Functions"),
+    (("service", "gcp", "cloud run"),  "diagrams.gcp.compute.Run"),
     (("server",  "gcp", "gce"),        "diagrams.gcp.compute.ComputeEngine"),
     (("service", "gcp", "gke"),        "diagrams.gcp.compute.KubernetesEngine"),
     # GCP database
     (("database","gcp", "spanner"),    "diagrams.gcp.database.Spanner"),
     (("database","gcp", "sql"),        "diagrams.gcp.database.SQL"),
     (("cache",   "gcp", "memorystore"),"diagrams.gcp.database.Memorystore"),
+    # AWS monitoring / security
+    (("monitoring",  "aws", "cloudwatch"),  "diagrams.aws.management.Cloudwatch"),
+    (("monitoring",  "aws", ""),            "diagrams.aws.management.Cloudwatch"),
+    (("security",    "aws", "waf"),         "diagrams.aws.security.WAF"),
+    (("security",    "aws", "cognito"),     "diagrams.aws.security.Cognito"),
+    (("security",    "aws", ""),            "diagrams.aws.security.Shield"),
+    (("esb",         "aws", ""),            "diagrams.aws.integration.MQ"),
     # On-Premise fallback
     (("server",      "on-premise", ""), "diagrams.onprem.compute.Server"),
     (("database",    "on-premise", ""), "diagrams.onprem.database.Mysql"),
@@ -51,6 +59,15 @@ ICON_TABLE: list[tuple[tuple[str, str, str], str]] = [
     (("loadbalancer","on-premise", ""), "diagrams.onprem.network.Nginx"),
     (("gateway",     "on-premise", ""), "diagrams.onprem.network.Nginx"),
     (("storage",     "on-premise", ""), "diagrams.onprem.storage.CephOsd"),
+    (("cdn",         "on-premise", ""), "diagrams.onprem.network.Internet"),
+    # 엔터프라이즈 타입 — 기술 키워드 우선, 폴백 순
+    (("monitoring",  "on-premise", "grafana"),    "diagrams.onprem.monitoring.Grafana"),
+    (("monitoring",  "on-premise", "prometheus"), "diagrams.onprem.monitoring.Prometheus"),
+    (("monitoring",  "on-premise", ""),           "diagrams.onprem.monitoring.Grafana"),
+    (("security",    "on-premise", "vault"),      "diagrams.onprem.security.Vault"),
+    (("security",    "on-premise", ""),           "diagrams.onprem.security.Vault"),
+    (("esb",         "on-premise", ""),           "diagrams.onprem.network.Internet"),
+    (("mainframe",   "on-premise", ""),           "diagrams.onprem.compute.Server"),
     # Generic fallback
     (("service",     "on-premise", ""), "diagrams.onprem.compute.Server"),
     (("client",      "on-premise", ""), "diagrams.onprem.client.User"),
