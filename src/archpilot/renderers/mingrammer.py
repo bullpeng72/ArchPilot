@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import re
 import textwrap
 from pathlib import Path
 from typing import ClassVar
 
-from archpilot.core.models import Component, ComponentType, HostType, SystemModel
+from archpilot.core.models import Component, SystemModel
 from archpilot.renderers.base import BaseRenderer
 
 # (type, host, tech_keyword) → diagrams 완전 클래스 경로

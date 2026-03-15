@@ -13,6 +13,7 @@ class IngestRequest(BaseModel):
 class ModernizeRequest(BaseModel):
     requirements: str
     scenario: str | None = None  # full_replace | partial | additive | None(분석 결과 자동 적용)
+    feedback: str | None = None  # 부분 수정 지시사항 — 있으면 기존 modern 설계에 해당 변경만 반영
 
 
 class ChatIngestRequest(BaseModel):

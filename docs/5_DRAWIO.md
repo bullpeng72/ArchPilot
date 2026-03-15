@@ -2,7 +2,7 @@
 
 > draw.io Desktop ↔ ArchPilot 양방향 워크플로우
 
-**Version**: 0.2.3 | **Last Updated**: 2026-03-15
+**Version**: 0.2.4 | **Last Updated**: 2026-03-15
 
 ---
 

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 
 @dataclass
@@ -31,6 +32,33 @@ class AppSession:
     design_rationale: dict[str, Any] | None = None   # DesignRationale
     migration_plan_rmc: dict[str, Any] | None = None # MigrationPlanRMC
 
+    # 멀티 퍼스펙티브 결과
+    design_perspective: dict[str, Any] | None = None  # MultiPerspectiveAnalysis (설계 검증)
+
+    # 부분 수정 이력
+    last_feedback: str = ""
+    patch_history: list[str] = field(default_factory=list)
+
+    # 스트리밍 작업 점유 여부 — ingest가 진행 중 reset하는 것을 방지
+    _busy: bool = field(default=False, repr=False)
+    _busy_operation: str = field(default="", repr=False)
+
+    @property
+    def is_busy(self) -> bool:
+        """LLM 스트리밍 작업이 진행 중이면 True."""
+        return self._busy
+
+    @contextmanager
+    def busy(self, operation: str) -> Iterator[None]:
+        """스트리밍 작업 구간을 표시한다. 종료(정상·예외 모두)시 자동 해제."""
+        self._busy = True
+        self._busy_operation = operation
+        try:
+            yield
+        finally:
+            self._busy = False
+            self._busy_operation = ""
+
     def reset_modernization(self) -> None:
         """새 시스템 주입 시 이전 분석·현대화 결과를 모두 초기화한다."""
         self.analysis = None
@@ -42,6 +70,9 @@ class AppSession:
         self.analysis_rmc = None
         self.design_rationale = None
         self.migration_plan_rmc = None
+        self.design_perspective = None
+        self.last_feedback = ""
+        self.patch_history = []
 
     @property
     def step(self) -> int:
@@ -57,6 +88,8 @@ class AppSession:
     def to_dict(self) -> dict[str, Any]:
         return {
             "step": self.step,
+            "is_busy": self._busy,
+            "busy_operation": self._busy_operation,
             "system": self.system,
             "analysis": self.analysis,
             "modern": self.modern,
@@ -70,6 +103,9 @@ class AppSession:
             "analysis_rmc": self.analysis_rmc,
             "design_rationale": self.design_rationale,
             "migration_plan_rmc": self.migration_plan_rmc,
+            "design_perspective": self.design_perspective,
+            "last_feedback": self.last_feedback,
+            "patch_history": self.patch_history,
         }
 
 

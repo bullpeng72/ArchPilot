@@ -26,7 +26,7 @@ def load_system_model(path: Path) -> SystemModel:
             f"[red]system.json JSON 파싱 오류 (line {e.lineno}): {e.msg}[/red]",
             err=True,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     except ValidationError as e:
         first = e.errors()[0]
         _console.print(
@@ -34,4 +34,4 @@ def load_system_model(path: Path) -> SystemModel:
             f"{first['loc']} — {first['msg']}[/red]",
             err=True,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e

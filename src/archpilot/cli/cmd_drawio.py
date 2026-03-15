@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 import subprocess
 import time
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Optional
+
+if TYPE_CHECKING:
+    from archpilot.core.models import SystemModel
 
 import typer
 from rich.console import Console
@@ -175,7 +177,7 @@ def edit(
             subprocess.Popen([str(exe), str(drawio_file)])
     except Exception as e:
         console.print(f"[red]실행 오류:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if not watch:
         console.print("[dim]편집 후 저장하면 수동으로 archpilot ingest diagram.drawio 를 실행하세요.[/dim]")
@@ -230,8 +232,26 @@ def export_cmd(
 
 # ── 내부 유틸 ─────────────────────────────────────────────────────────────────
 
-def _json_load(path: Path) -> dict:
+def _json_load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _merge_metadata(
+    model: "SystemModel",
+    prev_meta: dict[str, Any],
+    prev_comp_meta: dict[str, dict[str, Any]],
+) -> "SystemModel":
+    """이전 system.json의 메타데이터를 새로 파싱한 모델에 병합한다."""
+    if prev_meta:
+        model = model.model_copy(update={"metadata": {**prev_meta, **model.metadata}})
+    if prev_comp_meta:
+        updated = [
+            comp.model_copy(update={"metadata": {**prev_comp_meta[comp.id], **comp.metadata}})
+            if comp.id in prev_comp_meta else comp
+            for comp in model.components
+        ]
+        model = model.model_copy(update={"components": updated})
+    return model
 
 
 def _reparse(path: Path, out_dir: Path) -> None:
@@ -248,26 +268,17 @@ def _reparse(path: Path, out_dir: Path) -> None:
 
     # system.json 갱신 (기존 메타데이터 보존)
     sys_json = out_dir / "system.json"
-    prev_meta: dict = {}
-    prev_comp_meta: dict[str, dict] = {}
+    prev_meta: dict[str, Any] = {}
+    prev_comp_meta: dict[str, dict[str, Any]] = {}
     if sys_json.exists():
         try:
             prev = _json_load(sys_json)
             prev_meta = prev.get("metadata", {})
             prev_comp_meta = {c["id"]: c.get("metadata", {}) for c in prev.get("components", [])}
-        except Exception:
+        except (json.JSONDecodeError, KeyError, ValueError):
             pass
 
-    if prev_meta:
-        model = model.model_copy(update={"metadata": {**prev_meta, **model.metadata}})
-    if prev_comp_meta:
-        updated = []
-        for comp in model.components:
-            old_meta = prev_comp_meta.get(comp.id, {})
-            if old_meta:
-                comp = comp.model_copy(update={"metadata": {**old_meta, **comp.metadata}})
-            updated.append(comp)
-        model = model.model_copy(update={"components": updated})
+    model = _merge_metadata(model, prev_meta, prev_comp_meta)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     sys_json.write_text(model.model_dump_json(indent=2), encoding="utf-8")
@@ -287,12 +298,12 @@ def _watch_file(drawio_file: Path, output: Path) -> None:
     try:
         from watchdog.events import FileSystemEventHandler
         from watchdog.observers import Observer
-    except ImportError:
+    except ImportError as e:
         console.print(
             "[red]❌ watchdog 패키지가 필요합니다.[/red]\n"
             "  [cyan]pip install watchdog[/cyan]",
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     console.print(
         f"[bold]👁  파일 감시 중:[/bold] {drawio_file}\n"

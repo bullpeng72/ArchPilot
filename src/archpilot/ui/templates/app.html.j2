@@ -898,22 +898,55 @@
         연결 <strong style="color:var(--text);" x-text="state.modern?.connections?.length ?? 0"></strong>개
       </div>
       <div style="display:flex; flex-direction:column; gap:5px;">
-        <button class="btn btn-sm" @click="downloadDiagram('modern','mermaid')">💾 Modern Mermaid</button>
-        <button class="btn btn-sm" @click="downloadDiagram('modern','drawio')">💾 Modern draw.io</button>
-        <button class="btn btn-sm" @click="copyMmd('modern')">📋 Modern MMD 복사</button>
+        <button class="btn btn-sm btn-primary" @click="downloadSystem('modern','yaml')">💾 YAML 저장</button>
+        <button class="btn btn-sm btn-primary" @click="downloadSystem('modern','drawio')">💾 draw.io 저장</button>
+        <button class="btn btn-sm" @click="downloadSystem('modern','json')">💾 JSON 저장</button>
+        <button class="btn btn-sm" @click="downloadDiagram('modern','mermaid')">💾 Mermaid (.mmd)</button>
+        <button class="btn btn-sm" @click="copyMmd('modern')">📋 Mermaid 복사</button>
       </div>
       <div class="divider"></div>
-      <div style="font-size:12px; color:var(--muted); margin-bottom:5px;">요구사항 수정 후 재생성</div>
-      <textarea x-model="requirements" rows="4"></textarea>
-      <select x-model="scenario" style="width:100%; padding:4px 8px; border:1px solid var(--border); border-radius:5px; background:var(--bg3); color:var(--text); font-size:12px; margin-top:5px;">
-        <option value="">자동</option>
-        <option value="full_replace">전체 교체</option>
-        <option value="partial">일부 보존</option>
-        <option value="additive">신규 추가</option>
-      </select>
-      <button class="btn btn-sm" style="width:100%; margin-top:5px;"
-              :disabled="!requirements.trim() || loading"
-              @click="startModernize()">🔄 재생성</button>
+
+      <!-- 재생성 모드 토글 -->
+      <div style="display:flex; gap:4px; margin-bottom:8px;">
+        <button class="btn btn-sm" style="flex:1;"
+                :class="feedbackMode ? '' : 'btn-primary'"
+                @click="feedbackMode = false">🔄 전체 재생성</button>
+        <button class="btn btn-sm" style="flex:1;"
+                :class="feedbackMode ? 'btn-primary' : ''"
+                @click="feedbackMode = true">✏️ 부분 수정</button>
+      </div>
+
+      <!-- 부분 수정 모드 -->
+      <template x-if="feedbackMode">
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">
+            변경 지시사항 <span style="color:var(--accent);">(기존 설계를 유지하고 이것만 수정)</span>
+          </div>
+          <textarea x-model="feedback" rows="4"
+            placeholder="예: 데이터베이스를 PostgreSQL로 변경&#10;Redis 캐시 레이어 추가&#10;API Gateway와 Auth Service 사이에 Rate Limiter 추가"
+            style="width:100%; box-sizing:border-box;"></textarea>
+          <button class="btn btn-sm btn-primary" style="width:100%; margin-top:5px;"
+                  :disabled="!feedback.trim() || loading"
+                  @click="startPatch()">✏️ 부분 수정 적용</button>
+        </div>
+      </template>
+
+      <!-- 전체 재생성 모드 -->
+      <template x-if="!feedbackMode">
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">요구사항 수정 후 재생성</div>
+          <textarea x-model="requirements" rows="4"></textarea>
+          <select x-model="scenario" style="width:100%; padding:4px 8px; border:1px solid var(--border); border-radius:5px; background:var(--bg3); color:var(--text); font-size:12px; margin-top:5px;">
+            <option value="">자동</option>
+            <option value="full_replace">전체 교체</option>
+            <option value="partial">일부 보존</option>
+            <option value="additive">신규 추가</option>
+          </select>
+          <button class="btn btn-sm" style="width:100%; margin-top:5px;"
+                  :disabled="!requirements.trim() || loading"
+                  @click="startModernize()">🔄 전체 재생성</button>
+        </div>
+      </template>
     </div>
 
     <!-- Step 4: 비교 & 발표 -->
@@ -1434,7 +1467,126 @@
       </div>
     </div>
 
-    <!-- ③ 🧠 RMC 분석 자기평가 -->
+    <!-- ③ 🏛️ 멀티 퍼스펙티브 아키텍처 분석 -->
+    <div class="rs" :class="{locked: !state.multi_perspective}">
+      <div class="rs-header" :class="{open: reportSections.perspectives}"
+           @click="toggleSection('perspectives', !!state.multi_perspective)">
+        <span class="rs-icon">🏛️</span>
+        <span>8대 아키텍처 관점</span>
+        <button class="rs-copy" @click.stop="copySection('perspectives')" title="섹션 복사">📋</button>
+        <template x-if="!state.multi_perspective"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.multi_perspective"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.perspectives">
+        <template x-if="state.multi_perspective">
+          <div style="display:flex; flex-direction:column; gap:10px; padding:8px 0;">
+
+            <!-- consensus summary -->
+            <template x-if="state.multi_perspective.consensus_summary">
+              <div style="background:var(--bg3); border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:4px;">💬 공통 합의 사항</div>
+                <p style="margin:0; font-size:12.5px; line-height:1.6; color:var(--text);"
+                   x-text="state.multi_perspective.consensus_summary"></p>
+              </div>
+            </template>
+
+            <!-- priority actions -->
+            <template x-if="(state.multi_perspective.priority_actions??[]).length>0">
+              <div style="background:var(--bg3); border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:6px;">🎯 최우선 실행 과제</div>
+                <ol style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
+                  <template x-for="a in state.multi_perspective.priority_actions">
+                    <li style="font-size:12.5px; line-height:1.6; color:var(--text);" x-text="a"></li>
+                  </template>
+                </ol>
+              </div>
+            </template>
+
+            <!-- conflict areas -->
+            <template x-if="(state.multi_perspective.conflict_areas??[]).length>0">
+              <div style="background:#fff8e1; border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:#856404; font-weight:700; margin-bottom:6px;">⚡ 관점 간 충돌 영역</div>
+                <ul style="margin:0; padding-left:16px; display:flex; flex-direction:column; gap:3px;">
+                  <template x-for="c in state.multi_perspective.conflict_areas">
+                    <li style="font-size:12.5px; line-height:1.5; color:#5a4c00;" x-text="c"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <!-- individual perspectives -->
+            <template x-if="(state.multi_perspective.perspectives??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px;">관점별 세부 분석</div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <template x-for="pv in state.multi_perspective.perspectives">
+                    <div style="border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+                      <!-- perspective header with score bar -->
+                      <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--bg3);">
+                        <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; color:var(--accent); min-width:36px;" x-text="pv.perspective.toUpperCase()"></span>
+                        <span style="font-size:11px; color:var(--muted); flex:1;"
+                              x-text="{'sa':'솔루션','aa':'애플리케이션','da':'데이터','ia':'인프라','ta':'기술','swa':'소프트웨어','dba':'데이터베이스','qa':'품질'}[pv.perspective]??''"></span>
+                        <!-- score mini bar -->
+                        <div style="display:flex; align-items:center; gap:4px; min-width:80px;">
+                          <div style="flex:1; background:var(--border); border-radius:3px; height:6px; overflow:hidden;">
+                            <div :style="`width:${pv.score??50}%; height:100%; border-radius:3px; background:${(pv.score??50)>=70?'#82b366':(pv.score??50)>=50?'#d79b00':'#b85450'};`"></div>
+                          </div>
+                          <span style="font-size:11px; font-weight:700; min-width:26px; text-align:right;"
+                                :style="`color:${(pv.score??50)>=70?'var(--success,#3d8a4e)':(pv.score??50)>=50?'#b87800':'#b85450'}`"
+                                x-text="(pv.score??50)"></span>
+                        </div>
+                      </div>
+                      <div style="padding:6px 10px; display:flex; flex-direction:column; gap:5px;">
+                        <!-- rationale -->
+                        <template x-if="pv.rationale">
+                          <p style="margin:0; font-size:11.5px; color:var(--muted); font-style:italic; line-height:1.5;" x-text="pv.rationale"></p>
+                        </template>
+                        <!-- concerns -->
+                        <template x-if="(pv.concerns??[]).length>0">
+                          <div>
+                            <div style="font-size:11px; color:#b85450; font-weight:700; margin-bottom:2px;">⚠ 우려사항</div>
+                            <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:2px;">
+                              <template x-for="c in pv.concerns">
+                                <li style="font-size:12px; line-height:1.5; color:var(--text);" x-text="c"></li>
+                              </template>
+                            </ul>
+                          </div>
+                        </template>
+                        <!-- recommendations -->
+                        <template x-if="(pv.recommendations??[]).length>0">
+                          <div>
+                            <div style="font-size:11px; color:#3d8a4e; font-weight:700; margin-bottom:2px;">✅ 권고사항</div>
+                            <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:2px;">
+                              <template x-for="r in pv.recommendations">
+                                <li style="font-size:12px; line-height:1.5; color:var(--text);" x-text="r"></li>
+                              </template>
+                            </ul>
+                          </div>
+                        </template>
+                        <!-- risks -->
+                        <template x-if="(pv.risks??[]).length>0">
+                          <div>
+                            <div style="font-size:11px; color:#856404; font-weight:700; margin-bottom:2px;">🔴 위험요소</div>
+                            <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:2px;">
+                              <template x-for="r in pv.risks">
+                                <li style="font-size:12px; line-height:1.5; color:var(--text);" x-text="r"></li>
+                              </template>
+                            </ul>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ④ 🧠 RMC 분석 자기평가 -->
     <div class="rs" :class="{locked: !state.analysis_rmc}">
       <div class="rs-header" :class="{open: reportSections.rmc_analysis}"
            @click="toggleSection('rmc_analysis', !!state.analysis_rmc)">
@@ -1615,7 +1767,135 @@
       </div>
     </div>
 
-    <!-- ⑤ 📐 설계 해설 -->
+    <!-- ⑤ 🏗️ 설계 아키텍처 관점 검증 -->
+    <div class="rs" :class="{locked: !state.design_perspective}">
+      <div class="rs-header" :class="{open: reportSections.design_perspectives}"
+           @click="toggleSection('design_perspectives', !!state.design_perspective)">
+        <span class="rs-icon">🏗️</span>
+        <span>설계 관점 검증</span>
+        <button class="rs-copy" @click.stop="copySection('design_perspectives')" title="섹션 복사">📋</button>
+        <template x-if="!state.design_perspective"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.design_perspective"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.design_perspectives">
+        <template x-if="state.design_perspective">
+          <div style="display:flex; flex-direction:column; gap:10px; padding:8px 0;">
+
+            <!-- consensus summary -->
+            <template x-if="state.design_perspective.consensus_summary">
+              <div style="background:var(--bg3); border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:4px;">💬 설계 위원회 합의</div>
+                <p style="margin:0; font-size:12.5px; line-height:1.6; color:var(--text);"
+                   x-text="state.design_perspective.consensus_summary"></p>
+              </div>
+            </template>
+
+            <!-- priority actions -->
+            <template x-if="(state.design_perspective.priority_actions??[]).length>0">
+              <div style="background:var(--bg3); border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:6px;">🎯 설계 보완 최우선 과제</div>
+                <ol style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
+                  <template x-for="a in state.design_perspective.priority_actions">
+                    <li style="font-size:12.5px; line-height:1.6; color:var(--text);" x-text="a"></li>
+                  </template>
+                </ol>
+              </div>
+            </template>
+
+            <!-- conflict areas -->
+            <template x-if="(state.design_perspective.conflict_areas??[]).length>0">
+              <div style="background:#fff8e1; border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:#856404; font-weight:700; margin-bottom:6px;">⚡ 설계 트레이드오프</div>
+                <ul style="margin:0; padding-left:16px; display:flex; flex-direction:column; gap:3px;">
+                  <template x-for="c in state.design_perspective.conflict_areas">
+                    <li style="font-size:12.5px; line-height:1.5; color:#5a4c00;" x-text="c"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <!-- perspective score overview bar -->
+            <template x-if="(state.design_perspective.perspectives??[]).length>0">
+              <div style="background:var(--bg3); border-radius:6px; padding:8px 10px;">
+                <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:8px;">관점별 설계 완성도</div>
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                  <template x-for="pv in state.design_perspective.perspectives">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--accent); min-width:32px;" x-text="pv.perspective.toUpperCase()"></span>
+                      <div style="flex:1; background:var(--border); border-radius:3px; height:7px; overflow:hidden;">
+                        <div :style="`width:${pv.score??50}%; height:100%; border-radius:3px; transition:width .4s; background:${(pv.score??50)>=70?'#82b366':(pv.score??50)>=50?'#d79b00':'#b85450'};`"></div>
+                      </div>
+                      <span style="font-size:11px; font-weight:700; min-width:28px; text-align:right;"
+                            :style="`color:${(pv.score??50)>=70?'var(--success,#3d8a4e)':(pv.score??50)>=50?'#b87800':'#b85450'}`"
+                            x-text="(pv.score??50)"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- individual perspectives -->
+            <template x-if="(state.design_perspective.perspectives??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px;">관점별 설계 검증 상세</div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <template x-for="pv in state.design_perspective.perspectives">
+                    <div style="border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+                      <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--bg3);">
+                        <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; color:var(--accent); min-width:36px;" x-text="pv.perspective.toUpperCase()"></span>
+                        <span style="font-size:11px; color:var(--muted); flex:1;"
+                              x-text="{'sa':'솔루션','aa':'애플리케이션','da':'데이터','ia':'인프라','ta':'기술','swa':'소프트웨어','dba':'데이터베이스','qa':'품질'}[pv.perspective]??''"></span>
+                        <span style="font-size:11px; font-weight:700; padding:1px 7px; border-radius:8px;"
+                              :style="`background:${(pv.score??50)>=70?'#e8f5e9':(pv.score??50)>=50?'#fff3cd':'#fde8e8'}; color:${(pv.score??50)>=70?'#3d8a4e':(pv.score??50)>=50?'#856404':'#b85450'};`"
+                              x-text="(pv.score??50)+'/100'"></span>
+                      </div>
+                      <div style="padding:6px 10px; display:flex; flex-direction:column; gap:5px;">
+                        <template x-if="pv.rationale">
+                          <p style="margin:0; font-size:11.5px; color:var(--muted); font-style:italic; line-height:1.5;" x-text="pv.rationale"></p>
+                        </template>
+                        <template x-if="(pv.recommendations??[]).length>0">
+                          <div>
+                            <div style="font-size:11px; color:#3d8a4e; font-weight:700; margin-bottom:2px;">✅ 설계 권고사항</div>
+                            <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:2px;">
+                              <template x-for="r in pv.recommendations">
+                                <li style="font-size:12px; line-height:1.5; color:var(--text);" x-text="r"></li>
+                              </template>
+                            </ul>
+                          </div>
+                        </template>
+                        <template x-if="(pv.concerns??[]).length>0">
+                          <div>
+                            <div style="font-size:11px; color:#b85450; font-weight:700; margin-bottom:2px;">⚠ 보완 필요사항</div>
+                            <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:2px;">
+                              <template x-for="c in pv.concerns">
+                                <li style="font-size:12px; line-height:1.5; color:var(--text);" x-text="c"></li>
+                              </template>
+                            </ul>
+                          </div>
+                        </template>
+                        <template x-if="(pv.risks??[]).length>0">
+                          <div>
+                            <div style="font-size:11px; color:#856404; font-weight:700; margin-bottom:2px;">🔴 운영 위험</div>
+                            <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:2px;">
+                              <template x-for="r in pv.risks">
+                                <li style="font-size:12px; line-height:1.5; color:var(--text);" x-text="r"></li>
+                              </template>
+                            </ul>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ⑥ 📐 설계 해설 -->
     <div class="rs" :class="{locked: !state.design_rationale}">
       <div class="rs-header" :class="{open: reportSections.rationale}"
            @click="toggleSection('rationale', !!state.design_rationale)">
@@ -2323,7 +2603,8 @@ function archpilot() {
       step: 0, system: null, analysis: null, modern: null,
       legacy_mmd: '', legacy_drawio: '', modern_mmd: '', modern_drawio: '',
       migration_plan: '', requirements: '',
-      analysis_rmc: null, design_rationale: null, migration_plan_rmc: null,
+      analysis_rmc: null, multi_perspective: null,
+      design_rationale: null, design_perspective: null, migration_plan_rmc: null,
     },
 
     // UI 상태
@@ -2333,6 +2614,8 @@ function archpilot() {
     fileName:   '',
     requirements: '',
     scenario:   null,  // null | 'full_replace' | 'partial' | 'additive'
+    feedback:   '',    // 부분 수정 지시사항
+    feedbackMode: false, // true: 부분 수정, false: 전체 재생성
     dragging:   false,
     loading:    false,
     loadingMsg: '',
@@ -2373,7 +2656,9 @@ function archpilot() {
       summary:     true,
       analysis:    false,
       rmc_analysis:false,
-      diff:        false,
+      perspectives:        false,
+      diff:                false,
+      design_perspectives: false,
       rationale:   false,
       plan:        true,
       plan_rmc:    false,
@@ -2581,6 +2866,12 @@ connections:
       try {
         const res = await fetch('/api/state');
         this.state = await res.json();
+        // multi_perspective는 analysis 내부에 저장됨 — 별도 필드로 복원
+        if (!this.state.multi_perspective && this.state.analysis?.multi_perspective) {
+          this.state.multi_perspective = this.state.analysis.multi_perspective;
+        }
+        // design_perspective는 session.to_dict()에서 최상위로 전달됨
+        // (이미 state에 포함되어 있으므로 별도 처리 불필요)
         this.requirements = this.state.requirements || '';
         this.scenario     = this.state.scenario || null;
         this.activeStep   = Math.min(this.state.step, 4);
@@ -3104,6 +3395,7 @@ connections:
           else if (d.type === 'done') {
             this.state.analysis = d.result;
             this.state.analysis_rmc = d.analysis_rmc ?? null;
+            this.state.multi_perspective = d.multi_perspective ?? this.state.analysis?.multi_perspective ?? null;
             this.state.step = 3;
             this.activeStep = 2;
             this._openSectionForStep(2);
@@ -3139,6 +3431,7 @@ connections:
                 modern_drawio: d.modern_drawio, migration_plan: d.migration_plan,
                 scenario: d.scenario, step: 4,
                 design_rationale: d.design_rationale ?? null,
+                design_perspective: d.design_perspective ?? null,
                 migration_plan_rmc: d.migration_plan_rmc ?? null,
               });
               this.diff = computeDiff(this.state.system, this.state.modern);
@@ -3153,6 +3446,53 @@ connections:
         );
       } catch (e) { this.toast('error', e.message); }
       finally { this.loading = false; this.streamText = ''; this.progress = 0; }
+    },
+
+    // ── 부분 수정 ──────────────────────────────────────────────────────
+    async startPatch() {
+      if (!this.feedback.trim()) return;
+      this.loading = true; this.progress = 0; this.streamText = '';
+      this.loadingMsg = '부분 수정 적용 중...';
+      try {
+        await this.consumeStream(
+          '/api/modernize/stream',
+          { requirements: this.requirements, scenario: this.scenario || null, feedback: this.feedback },
+          async (d) => {
+            if (d.type === 'progress') { this.progress = d.pct; this.loadingMsg = d.msg; }
+            else if (d.type === 'chunk') {
+              this.streamText += d.text;
+              this.$nextTick(() => {
+                const b = this.$refs.streamBox; if (b) b.scrollTop = b.scrollHeight;
+              });
+            }
+            else if (d.type === 'done') {
+              if (d.scenario) this.scenario = d.scenario;
+              Object.assign(this.state, {
+                modern: d.modern, modern_mmd: d.modern_mmd,
+                modern_drawio: d.modern_drawio, migration_plan: d.migration_plan,
+                scenario: d.scenario, step: 4,
+                // 부분 수정: 기존 RMC 결과 보존, 새로 생성된 경우에만 교체
+                design_rationale: d.design_rationale ?? this.state.design_rationale,
+                design_perspective: d.design_perspective ?? this.state.design_perspective,
+                migration_plan_rmc: d.migration_plan_rmc ?? this.state.migration_plan_rmc,
+              });
+              this.diff = computeDiff(this.state.system, this.state.modern);
+              this.feedbackMode = false;
+              this.feedback = '';
+              this.$nextTick(() => this.renderDiagram());
+              this.toast('success', `부분 수정이 적용됐습니다`);
+            }
+            else if (d.type === 'error') throw new Error(d.msg);
+            else if (d.type === 'warning') this.toast('warning', d.msg);
+          }
+        );
+      } catch (e) { this.toast('error', e.message); }
+      finally { this.loading = false; this.streamText = ''; this.progress = 0; }
+    },
+
+    // ── 시스템 모델 다운로드 (yaml / json / drawio) ────────────────────
+    downloadSystem(step, fmt) {
+      window.open(`/api/download/${step}?fmt=${fmt}`, '_blank');
     },
 
     // ── 다이어그램 다운로드 ────────────────────────────────────────────
@@ -3202,7 +3542,9 @@ connections:
       const texts = {
         summary:      () => `시스템 요약\n컴포넌트: ${this.state.system?.components?.length ?? 0}\n연결: ${this.state.system?.connections?.length ?? 0}\n${this.state.analysis?.summary ?? ''}`,
         analysis:     () => this.state.analysis ? JSON.stringify(this.state.analysis, null, 2) : '',
-        rmc_analysis: () => this.state.analysis_rmc ? JSON.stringify(this.state.analysis_rmc, null, 2) : '',
+        rmc_analysis:  () => this.state.analysis_rmc ? JSON.stringify(this.state.analysis_rmc, null, 2) : '',
+        perspectives:         () => this.state.multi_perspective ? JSON.stringify(this.state.multi_perspective, null, 2) : '',
+        design_perspectives:  () => this.state.design_perspective ? JSON.stringify(this.state.design_perspective, null, 2) : '',
         diff:         () => this.diff ? JSON.stringify(this.diff, null, 2) : '',
         rationale:    () => this.state.design_rationale ? JSON.stringify(this.state.design_rationale, null, 2) : '',
         plan:         () => this.state.migration_plan ?? '',
@@ -3242,6 +3584,8 @@ connections:
       if (this.state.migration_plan)              { this.reportSections.plan = true; }
       if (this.state.migration_plan_rmc)          { this.reportSections.plan_rmc = true; }
       if (this.state.analysis_rmc)               { this.reportSections.rmc_analysis = true; }
+      if (this.state.multi_perspective)          { this.reportSections.perspectives = true; }
+      if (this.state.design_perspective)        { this.reportSections.design_perspectives = true; }
       if (!this.reportOpen)                       { this.reportOpen = true; }
     },
   };

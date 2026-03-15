@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
 
 from archpilot.core.models import (
     Criticality,
@@ -18,7 +19,7 @@ from archpilot.core.parser import ParseError, SystemParser
 from archpilot.renderers.drawio import DrawioRenderer
 from archpilot.renderers.mermaid import MermaidRenderer
 from archpilot.ui import session as sess
-from archpilot.ui.helpers import _repair_connections, _sse, _stream_response
+from archpilot.ui.helpers import _sse, _stream_response
 from archpilot.ui.schemas import ChatIngestRequest, DrawioIngestRequest, IngestRequest
 
 _log = logging.getLogger("archpilot.server")
@@ -33,7 +34,13 @@ def _get_output_dir(request: Request) -> Path:
 # ── POST /api/ingest ──────────────────────────────────────────────────────────
 
 @router.post("/ingest")
-async def ingest(req: IngestRequest, request: Request):
+async def ingest(req: IngestRequest, request: Request) -> dict:
+    s = sess.get()
+    if s.is_busy:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{s._busy_operation}' 작업이 진행 중입니다. 완료 후 다시 시도하세요.",
+        )
     output_dir = _get_output_dir(request)
     content = req.content.strip()
     mode = req.mode
@@ -61,14 +68,13 @@ async def ingest(req: IngestRequest, request: Request):
         else:  # json
             model = parser._from_json(content, Path("<web>"))
     except ParseError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     legacy_mmd = MermaidRenderer().render(model)
     legacy_drawio = DrawioRenderer().render(model)
 
-    s = sess.get()
     s.system = json.loads(model.model_dump_json())
     s.legacy_mmd = legacy_mmd
     s.legacy_drawio = legacy_drawio
@@ -93,7 +99,7 @@ async def ingest(req: IngestRequest, request: Request):
 # ── POST /api/ingest/file ────────────────────────────────────────────────────
 
 @router.post("/ingest/file")
-async def ingest_file(file: UploadFile = File(...), request: Request = None):
+async def ingest_file(request: Request, file: UploadFile = File(...)) -> dict:  # noqa: B008
     content = (await file.read()).decode("utf-8")
     filename = file.filename or ""
     if filename.endswith((".yaml", ".yml")):
@@ -111,19 +117,33 @@ async def ingest_file(file: UploadFile = File(...), request: Request = None):
 # ── POST /api/ingest/drawio ──────────────────────────────────────────────────
 
 @router.post("/ingest/drawio")
-async def ingest_drawio(req: DrawioIngestRequest, request: Request):
+async def ingest_drawio(req: DrawioIngestRequest, request: Request) -> dict:
     output_dir = _get_output_dir(request)
 
     from archpilot.renderers.drawio_parser import parse_drawio_xml
 
     s = sess.get()
+    if s.is_busy:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{s._busy_operation}' 작업이 진행 중입니다. 완료 후 다시 시도하세요.",
+        )
 
     try:
         model = await asyncio.to_thread(parse_drawio_xml, req.xml, req.system_name)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # draw.io 파서는 tech_ontology 보강을 거치지 않으므로 여기서 적용
+    from archpilot.core.models import Component as _Component
+    from archpilot.core.tech_ontology import enrich_component
+    enriched_comps = [
+        _Component.model_validate(enrich_component(c.model_dump(mode="json")))
+        for c in model.components
+    ]
+    model = model.model_copy(update={"components": enriched_comps})
 
     # ── 기존 세션의 semantic 메타데이터 보존 ────────────────────────────────
     if s.system:
@@ -176,7 +196,6 @@ async def ingest_drawio(req: DrawioIngestRequest, request: Request):
     # ────────────────────────────────────────────────────────────────────────
 
     legacy_mmd = MermaidRenderer().render(model)
-    legacy_drawio = DrawioRenderer().render(model)
 
     s.system = json.loads(model.model_dump_json())
     s.legacy_mmd = legacy_mmd
@@ -202,8 +221,8 @@ async def ingest_drawio(req: DrawioIngestRequest, request: Request):
 # ── POST /api/chat/ingest/stream ─────────────────────────────────────────────
 
 @router.post("/chat/ingest/stream")
-async def chat_ingest_stream(req: ChatIngestRequest, request: Request):
-    from archpilot.llm.client import LLMError, get_async_client
+async def chat_ingest_stream(req: ChatIngestRequest, request: Request) -> StreamingResponse:
+    from archpilot.llm.client import get_async_client
     from archpilot.llm.prompts import CHAT_INGEST_SYSTEM_PROMPT
 
     output_dir = _get_output_dir(request)

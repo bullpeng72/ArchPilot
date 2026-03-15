@@ -64,7 +64,7 @@ def modernize(
         modern = modernizer.modernize(legacy, requirements, analysis)
     except Exception as e:
         console.print(f"[red]현대화 설계 생성 실패: {e}[/red]", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     modern_json_path = modern_dir / "system.json"
     modern_json_path.write_text(modern.model_dump_json(indent=2), encoding="utf-8")

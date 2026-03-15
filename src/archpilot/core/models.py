@@ -119,18 +119,21 @@ class SystemModel(BaseModel):
     def _validate_connections(self) -> SystemModel:
         ids = {c.id for c in self.components}
         valid: list[Connection] = []
+        dropped: list[str] = []
         for conn in self.connections:
             if conn.from_id not in ids:
-                logger.warning(
-                    "Connection 출발지 '%s'가 components에 없어 무시됩니다.", conn.from_id
-                )
+                msg = f"{conn.from_id} → {conn.to_id} (출발지 없음)"
+                logger.warning("Connection %s가 components에 없어 무시됩니다.", msg)
+                dropped.append(msg)
             elif conn.to_id not in ids:
-                logger.warning(
-                    "Connection 도착지 '%s'가 components에 없어 무시됩니다.", conn.to_id
-                )
+                msg = f"{conn.from_id} → {conn.to_id} (도착지 없음)"
+                logger.warning("Connection %s가 components에 없어 무시됩니다.", msg)
+                dropped.append(msg)
             else:
                 valid.append(conn)
         self.connections = valid
+        if dropped:
+            self.metadata["_dropped_connections"] = dropped
         return self
 
     @model_validator(mode="after")
@@ -237,6 +240,38 @@ class DesignRationale(BaseModel):
     rmc_self_eval: RMCSelfEval = Field(default_factory=RMCSelfEval)
 
 
+# ── 멀티 퍼스펙티브 아키텍처 분석 모델 ───────────────────────────────────────
+
+class ArchPerspective(str, Enum):
+    """8대 아키텍처 관점."""
+    SA  = "sa"   # Solution Architecture
+    AA  = "aa"   # Application Architecture
+    DA  = "da"   # Data Architecture
+    IA  = "ia"   # Infrastructure Architecture
+    TA  = "ta"   # Technical Architecture
+    SWA = "swa"  # Software Architecture
+    DBA = "dba"  # Database Architecture
+    QA  = "qa"   # Quality Architecture
+
+
+class PerspectiveAnalysis(BaseModel):
+    """단일 아키텍처 관점 분석 결과."""
+    perspective: ArchPerspective
+    concerns: list[str] = Field(default_factory=list)         # 주요 우려사항
+    recommendations: list[str] = Field(default_factory=list)  # 권고 사항
+    risks: list[str] = Field(default_factory=list)            # 관점별 위험 요소
+    score: int = 50                                            # 현재 아키텍처 품질 0~100
+    rationale: str = ""                                        # 점수 근거
+
+
+class MultiPerspectiveAnalysis(BaseModel):
+    """8대 관점 협업 분석 종합 결과."""
+    perspectives: list[PerspectiveAnalysis] = Field(default_factory=list)
+    consensus_summary: str = ""           # 공통 합의 사항
+    conflict_areas: list[str] = Field(default_factory=list)    # 관점 간 충돌 영역
+    priority_actions: list[str] = Field(default_factory=list)  # 최우선 실행 과제
+
+
 # ── 분석 결과 모델 ────────────────────────────────────────────────────────────
 
 class ModernizationAction(str, Enum):
@@ -254,6 +289,16 @@ class ModernizationScenario(str, Enum):
     FULL_REPLACE = "full_replace"  # (1) 전체 교체 — 대부분의 컴포넌트를 새로 설계
     PARTIAL      = "partial"       # (2) 일부 보존 + 수정 + 신규 — 핵심은 유지, 주변부 현대화
     ADDITIVE     = "additive"      # (3) 대부분 보존 + 신규 추가 — 기존 유지, 기능 확장
+
+    @property
+    def label(self) -> str:
+        """사람이 읽기 좋은 레이블."""
+        _labels = {
+            "full_replace": "전체 교체 (Full Replace)",
+            "partial": "부분 현대화 (Partial)",
+            "additive": "점진적 확장 (Additive)",
+        }
+        return _labels[self.value]
 
 
 class EffortLevel(str, Enum):
@@ -333,6 +378,9 @@ class AnalysisResult(BaseModel):
     scenario_rationale: str = ""
     component_decisions: list[ComponentDecision] = Field(default_factory=list)
     legacy_quality: ArchitectureQuality = Field(default_factory=ArchitectureQuality)
+
+    # ── 멀티 퍼스펙티브 분석 (8대 아키텍처 관점) ────────────────────────────────
+    multi_perspective: MultiPerspectiveAnalysis | None = None
 
     # ── 재귀적 메타 인지 자기평가 ────────────────────────────────────────────
     rmc_evaluation: AnalysisRMC | None = None

@@ -44,6 +44,7 @@ def _build_registry() -> dict[str, type[BaseRenderer]]:
 
 
 def get_renderer(fmt: str) -> BaseRenderer:
+    """포맷 이름으로 렌더러 인스턴스를 반환한다. 미지원 포맷이면 ValueError."""
     registry = _build_registry()
     cls = registry.get(fmt.lower())
     if cls is None:
@@ -61,6 +62,7 @@ def run_renderers_parallel(
     output_dir: Path,
     filename: str = "diagram",
 ) -> dict[str, Path | Exception]:
+    """여러 포맷의 렌더러를 스레드 풀에서 병렬 실행하고 {포맷: 결과경로 | 예외} 매핑을 반환한다."""
     import concurrent.futures
 
     renderers = [(fmt, get_renderer(fmt)) for fmt in formats]
@@ -79,7 +81,7 @@ def run_renderers_parallel(
                 except Exception as e:
                     results[fmt] = e
         except concurrent.futures.TimeoutError:
-            for future, fmt in futures.items():
+            for _future, fmt in futures.items():
                 if fmt not in results:
                     results[fmt] = TimeoutError(
                         f"렌더러 '{fmt}': {_RENDER_TIMEOUT}초 초과로 취소됨"

@@ -49,7 +49,6 @@ class DrawioRenderer(BaseRenderer):
         ET.SubElement(graph_root, "mxCell", id="1", parent="0")
 
         groups = model.components_by_host()
-        all_components = model.components
         positions: dict[str, tuple[int, int]] = {}
 
         # 호스트 그룹별 클러스터 박스 + 내부 컴포넌트 배치

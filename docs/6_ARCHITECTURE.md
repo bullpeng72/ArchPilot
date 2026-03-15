@@ -1,6 +1,6 @@
 # ArchPilot — 내부 아키텍처
 
-버전: 0.2.3
+버전: 0.2.4
 최종 수정: 2026-03-15
 
 ---
@@ -164,7 +164,46 @@ draw.io XML 파싱 및 자연어 입력 시 타입 자동 추론에 사용됨.
 
 ---
 
-### 2.5 `llm/client.py` — LLM 단일 진입점
+### 2.5 `core/transformation_patterns.py` — DT/AI 변환 패턴
+
+시스템 컴포넌트·기술 스택을 분석해 적용 가능한 아키텍처 패턴을 자동 선별한다.
+
+```python
+DIGITAL_TRANSFORMATION_PATTERNS: dict[str, TransformationPattern]  # 16개
+AI_MODERNIZATION_PATTERNS: dict[str, TransformationPattern]        # 11개
+
+class TransformationPattern(TypedDict):
+    name: str
+    description: str
+    applicable_when: list[str]     # 적용 조건 (자연어)
+    tech_triggers: list[str]       # 컴포넌트 tech 스택 트리거 키워드
+    component_triggers: list[str]  # ComponentType 트리거
+    expected_benefits: list[str]
+    implementation_complexity: str  # low | medium | high
+```
+
+**선별 흐름**: `build_pattern_grounding(system_dict)` → 시스템 컴포넌트의 `tech`·`type` 필드를 패턴별 트리거와 매칭 → 관련도 높은 패턴 상위 `top_k`개 추출 → LLM 프롬프트 뒤에 그라운딩 컨텍스트로 주입
+
+---
+
+### 2.6 `llm/grounding.py` — 패턴 기반 LLM 그라운딩
+
+```python
+def build_pattern_grounding(
+    system_dict: dict,
+    top_k: int = 5,
+    max_chars: int = 3000,
+) -> str:
+    """시스템에 적합한 DT/AI 패턴을 선별해 LLM 그라운딩 컨텍스트 문자열로 반환."""
+```
+
+- `analyze/stream`과 `modernize/stream` 양쪽에서 사용
+- 시스템 규모·기술 스택 기반으로 DT(16개) + AI(11개) 패턴 중 상위 `top_k`개 자동 선별
+- 선별 기준: tech 트리거 매칭 수 + ComponentType 트리거 매칭 수 합산 점수
+
+---
+
+### 2.7 `llm/client.py` — LLM 단일 진입점
 
 ```python
 class LLMClient:
@@ -201,7 +240,7 @@ llm/parser_agent.py  → LLMClient.chat(PARSE_SYSTEM_PROMPT, user_text)
 
 ---
 
-### 2.6 `renderers/base.py` — 렌더러 인터페이스
+### 2.8 `renderers/base.py` — 렌더러 인터페이스
 
 ```python
 class BaseRenderer(ABC):
@@ -237,7 +276,7 @@ def get_renderer(fmt: str) -> BaseRenderer:
 
 ---
 
-### 2.7 `renderers/drawio_parser.py` — draw.io 역방향 파서
+### 2.9 `renderers/drawio_parser.py` — draw.io 역방향 파서
 
 draw.io XML → SystemModel 변환. `archpilot drawio watch` 및 web API에서 사용.
 
@@ -272,7 +311,7 @@ def parse_drawio_xml(xml: str) -> SystemModel:
 
 ---
 
-### 2.8 `renderers/drawio_library.py` — 컴포넌트 라이브러리
+### 2.10 `renderers/drawio_library.py` — 컴포넌트 라이브러리
 
 `archpilot drawio setup` 시 draw.io Desktop 사이드바에 표시될 컴포넌트 팔레트 XML을 생성.
 
@@ -283,7 +322,7 @@ def write_library_file(path: Path) -> None:
 
 ---
 
-### 2.9 `core/drawio_config.py` — draw.io Desktop 통합
+### 2.11 `core/drawio_config.py` — draw.io Desktop 통합
 
 OS별 경로 탐색 및 Electron localStorage(LevelDB) 직접 조작.
 
@@ -319,7 +358,7 @@ record 구조:
 
 ---
 
-### 2.10 `core/diff.py` — Before/After 비교 엔진
+### 2.12 `core/diff.py` — Before/After 비교 엔진
 
 ```python
 class SystemDiff:
@@ -343,7 +382,7 @@ reveal.js 슬라이드의 "Before/After 비교표"에 사용.
 
 ---
 
-### 2.11 `ui/server.py` + `ui/routers/` — FastAPI 인터랙티브 서버
+### 2.13 `ui/server.py` + `ui/routers/` — FastAPI 인터랙티브 서버
 
 v0.2.3부터 API 라우터를 독립 파일로 분리. `server.py`는 앱 팩토리 + 페이지/다이어그램 엔드포인트만 담당.
 
@@ -376,6 +415,7 @@ archpilot serve output/
 | GET | `/api/state` | server.py | 현재 세션 상태 조회 |
 | DELETE | `/api/state` | server.py | 세션 초기화 |
 | GET | `/api/diagram/{step}` | server.py | 다이어그램 다운로드 (mermaid/drawio) |
+| GET | `/api/download/{step}` | server.py | 시스템 모델 다운로드 (`?fmt=yaml\|json\|drawio`) |
 | POST | `/api/ingest` | routers/ingest.py | YAML/JSON/텍스트 주입 |
 | POST | `/api/ingest/file` | routers/ingest.py | 파일 업로드 주입 |
 | POST | `/api/ingest/drawio` | routers/ingest.py | draw.io XML 주입 |
@@ -395,7 +435,7 @@ archpilot serve output/
 
 ---
 
-### 2.12 `ui/session.py` — 인메모리 세션 관리
+### 2.14 `ui/session.py` — 인메모리 세션 관리
 
 ```python
 @dataclass
@@ -413,6 +453,15 @@ class AppSession:
     analysis_rmc: dict | None = None
     design_rationale: dict | None = None
     migration_plan_rmc: dict | None = None
+    design_perspective: dict | None = None  # MultiPerspectiveAnalysis (현대화 검증)
+    _busy: bool = False                 # LLM 스트리밍 진행 중 여부
+    _busy_operation: str = ""           # 진행 중인 작업명
+
+    @property
+    def is_busy(self) -> bool: ...
+
+    @contextmanager
+    def busy(self, operation: str) -> Iterator[None]: ...  # try/finally 자동 해제
 
     def reset_modernization(self) -> None: ...   # 분석·현대화 결과 초기화
     def to_dict(self) -> dict: ...               # /api/state 응답용
@@ -423,7 +472,8 @@ def get() -> AppSession: ...
 def reset() -> None: ...
 ```
 
-단일 사용자 로컬 CLI 도구이므로 싱글턴 인메모리 세션으로 충분.
+- 단일 사용자 로컬 CLI 도구이므로 싱글턴 인메모리 세션으로 충분
+- `busy()` 컨텍스트 매니저: LLM 스트리밍 중 ingest 요청이 오면 HTTP 409 반환
 
 ---
 

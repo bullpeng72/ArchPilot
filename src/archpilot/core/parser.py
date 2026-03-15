@@ -5,11 +5,21 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 import yaml
+
+_ET = TypeVar("_ET")
+
+
+def _parse_enum(raw: str, cls: type[_ET], default: _ET) -> _ET:
+    """문자열 값을 Enum으로 변환. 실패 시 default 반환."""
+    try:
+        return cls(raw.lower())  # type: ignore[call-arg]
+    except (ValueError, KeyError):
+        return default
 
 from archpilot.core.models import (
     Component,
@@ -102,13 +112,12 @@ class SystemParser:
         # LLM 생성 모델에서 존재하지 않는 컴포넌트를 참조하는 connection을 제거
         valid_ids = {c.id for c in components}
         filtered: list[Connection] = []
+        dropped_conn_refs: list[str] = []
         for conn in connections:
             if conn.from_id not in valid_ids or conn.to_id not in valid_ids:
-                logger.warning(
-                    "connection 무시 (존재하지 않는 컴포넌트 참조): %s → %s",
-                    conn.from_id,
-                    conn.to_id,
-                )
+                ref = f"{conn.from_id}→{conn.to_id}"
+                logger.warning("connection 무시 (존재하지 않는 컴포넌트 참조): %s → %s", conn.from_id, conn.to_id)
+                dropped_conn_refs.append(ref)
             else:
                 filtered.append(conn)
         connections = filtered
@@ -117,6 +126,8 @@ class SystemParser:
         # 표준 스키마에 없는 최상위 키를 metadata에 병합
         extra = {k: v for k, v in data.items() if k not in self._SYSTEM_KNOWN}
         metadata = {**data.get("metadata", {}), **extra}
+        if dropped_conn_refs:
+            metadata["_dropped_connections"] = dropped_conn_refs
 
         return SystemModel(
             name=data["name"],
@@ -140,35 +151,16 @@ class SystemParser:
             if field not in raw:
                 raise ParseError(f"component에 '{field}' 필드가 필요합니다: {raw}")
 
-        # type 값이 enum에 없으면 UNKNOWN으로 fallback
-        try:
-            ctype = ComponentType(raw["type"].lower())
-        except ValueError:
-            ctype = ComponentType.UNKNOWN
-
-        # host 값이 enum에 없으면 ON_PREMISE로 fallback
-        try:
-            host = HostType(raw.get("host", "on-premise").lower())
-        except ValueError:
-            host = HostType.ON_PREMISE
-
-        # criticality — 문자열이면 enum으로 변환, 실패하면 기본값
-        criticality = Criticality.MEDIUM
-        if raw.get("criticality"):
-            try:
-                criticality = Criticality(str(raw["criticality"]).lower())
-            except ValueError:
-                pass
-
-        # lifecycle_status
-        lifecycle_status = LifecycleStatus.ACTIVE
-        if raw.get("lifecycle_status"):
-            try:
-                lifecycle_status = LifecycleStatus(str(raw["lifecycle_status"]).lower())
-            except ValueError:
-                pass
-
-        # data_classification
+        ctype = _parse_enum(raw["type"], ComponentType, ComponentType.UNKNOWN)
+        host = _parse_enum(raw.get("host", "on-premise"), HostType, HostType.ON_PREMISE)
+        criticality = (
+            _parse_enum(str(raw["criticality"]), Criticality, Criticality.MEDIUM)
+            if raw.get("criticality") else Criticality.MEDIUM
+        )
+        lifecycle_status = (
+            _parse_enum(str(raw["lifecycle_status"]), LifecycleStatus, LifecycleStatus.ACTIVE)
+            if raw.get("lifecycle_status") else LifecycleStatus.ACTIVE
+        )
         data_classification: DataClassification | None = None
         if raw.get("data_classification"):
             try:

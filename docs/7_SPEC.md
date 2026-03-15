@@ -1,6 +1,6 @@
 # ArchPilot — 기능 명세 (SPEC)
 
-버전: 0.2.3
+버전: 0.2.4
 최종 수정: 2026-03-15
 
 ---
@@ -211,6 +211,9 @@ archpilot modernize <system.json>
 - draw.io XML 붙여넣기 주입 (`POST /api/ingest/drawio`)
 - 실시간 LLM 분석 스트리밍 (`GET /api/analyze/stream`)
 - 실시간 현대화 설계 스트리밍 (`POST /api/modernize/stream`)
+  - **부분 수정 (Patch) 모드**: `feedback` 필드 포함 시 기존 `s.modern` 기반으로 최소 수정 (LLM 2-pass: patch + migration plan). RMC 패스 재사용
+  - `_build_patch_context()`: `keep`/`rehost` 컴포넌트 변경 금지 제약 + 분석 컨텍스트(pain_points, component_decisions, design_philosophy) 자동 주입
+- 시스템 모델 다운로드 (`GET /api/download/{step}?fmt=yaml|json|drawio`)
 
 #### 2.4.3 발표 슬라이드 구성 (`/slides`)
 
@@ -227,11 +230,11 @@ archpilot modernize <system.json>
 #### 2.4.4 CLI 옵션
 
 ```
-archpilot serve <output_dir>
+archpilot serve [output_dir]
   --port, -p    포트 번호 (기본: 8080)
   --host        호스트 (기본: 127.0.0.1)
-  --open        브라우저 자동 오픈 (기본: True)
-  --theme       reveal.js 테마: black|white|moon|sky (기본: black)
+  --open/--no-open  브라우저 자동 오픈 (기본: open)
+  --reload      개발 모드: 코드 변경 시 자동 재시작
 ```
 
 ---
@@ -239,9 +242,13 @@ archpilot serve <output_dir>
 ### 2.5 FR-05: 정적 HTML 내보내기 (export)
 
 ```
-archpilot export <system.json>
-  --dest, -d    저장 경로 (기본: <system.json 위치>/legacy/diagram.drawio)
+archpilot export [output_dir]
+  --dest, -d    저장 디렉토리 (기본: dist/)
+  --theme       reveal.js 테마: black,white,league,beige,sky,night,moon,serif,solarized (기본: black)
 ```
+
+- output_dir의 system.json, analysis.json, modern/, legacy/ 파일을 읽어 정적 HTML 슬라이드 생성
+- 생성 결과: `dist/index.html` (reveal.js 발표 자료)
 
 ---
 
@@ -420,7 +427,7 @@ class AnalysisResult(BaseModel):
 
 - **모델**: gpt-4o
 - **응답 형식**: JSON (SystemModel 스키마 준수)
-- **최대 토큰**: 12000
+- **최대 토큰**: 16000 (Skeleton 단계 4000, Plan 단계 6000)
 - **입력**: Legacy SystemModel + AnalysisResult + 사용자 요구사항
 
 ### 5.4 마이그레이션 플랜
@@ -509,7 +516,7 @@ class BaseRenderer(ABC):
 ```toml
 [project]
 name = "archpilot"
-version = "0.2.3"
+version = "0.2.4"
 requires-python = ">=3.11"
 dependencies = [
     "typer[all]>=0.12,<1.0",
@@ -542,7 +549,7 @@ tag v*.*.* → ruff + mypy → pytest → build wheel → upload to PyPI (Prod)
 
 ---
 
-## 9. 미지원 범위 (v0.2.3)
+## 9. 미지원 범위 (v0.2.4)
 
 - PlantUML / C4 모델 출력
 - 실시간 협업 편집

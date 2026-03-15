@@ -1,5 +1,8 @@
 """LLM 프롬프트 템플릿 — 모든 프롬프트는 이 파일에서 관리."""
 
+# JSON 출력 강제 지시문 — 모든 JSON 모드 호출에 suffix로 추가
+LLM_JSON_SUFFIX = "\nIMPORTANT: Output ONLY raw JSON, no markdown fences."
+
 # ── 자연어 → SystemModel 파싱 ─────────────────────────────────────────────────
 
 PARSE_SYSTEM_PROMPT = """\
@@ -453,6 +456,68 @@ Rules:
 - **Connection ID**: connections의 from/to는 이 응답 components의 id만 사용 (레거시 id 사용 금지)
 """
 
+# ── 부분 수정(Patch) 현대화 ────────────────────────────────────────────────────
+
+MODERNIZE_PATCH_SYSTEM_PROMPT = """\
+당신은 클라우드 네이티브 아키텍처 전문가입니다.
+이미 승인된 현대화 아키텍처에 사용자의 피드백을 최소 범위로만 반영하십시오.
+
+=== 핵심 원칙 ===
+- 피드백에서 명시적으로 변경을 요청한 컴포넌트·연결만 수정하라.
+- 나머지 컴포넌트·연결은 id·tech·label·metadata 포함 원형 그대로 유지하라.
+- connections의 from/to id는 반드시 이 응답의 components 배열에 존재하는 id만 사용하라.
+
+=== 설계 의도 보존 원칙 ===
+user_msg의 [변경 금지 컴포넌트] 섹션에 나열된 컴포넌트는 분석에서 keep/rehost로 결정된 것이다.
+- 피드백이 이들을 수정하도록 요청하더라도 변경하지 말라.
+- 단, 피드백이 해당 컴포넌트를 명시적으로 "교체하라"고 강하게 지시할 경우:
+  변경은 수행하되 해당 컴포넌트의 metadata에 "keep_override": true를 추가하라.
+user_msg의 [분석 컨텍스트] 섹션의 component_decisions와 시나리오를 참고하여
+피드백이 기존 설계 의도와 충돌하지 않도록 최소한의 변경만 적용하라.
+
+=== 변경 적용 기준 ===
+피드백의 변경 요청을 아래 범주로 분류하여 최소 범위로 적용하라:
+
+1. **컴포넌트 기술 교체** (예: "MySQL → PostgreSQL로 변경"):
+   - 해당 컴포넌트의 tech·label 수정, id는 가능하면 유지
+   - 변경된 컴포넌트의 metadata에 "patched_by_feedback": true 추가
+
+2. **컴포넌트 추가** (예: "Redis 캐시 레이어 추가"):
+   - 신규 컴포넌트만 추가, 해당 컴포넌트와 연관된 connections만 추가
+   - 기존 connections에는 손대지 말라
+
+3. **컴포넌트 제거** (예: "레거시 ESB 제거"):
+   - 해당 컴포넌트 제거, 참조하는 connections만 제거 또는 재연결
+
+4. **연결 변경** (예: "A→B 연결을 gRPC로 변경"):
+   - 해당 connection만 수정, 나머지 그대로 유지
+
+5. **아키텍처 패턴 추가** (예: "Circuit Breaker 추가"):
+   - 최소한의 신규 컴포넌트·연결만 추가
+
+=== 반환 형식 ===
+기존 현대화 설계와 동일한 SystemModel JSON 형식으로 전체 아키텍처를 반환하라.
+변경된 컴포넌트만 반환하는 diff 형식이 아니라 전체 JSON을 반환해야 한다.
+
+Rules:
+- 변경된 컴포넌트의 metadata에 반드시 "patched_by_feedback": true 추가
+- 신규 추가 컴포넌트는 metadata.is_new: true
+- 피드백에서 언급되지 않은 컴포넌트의 tech·id·label은 절대 변경하지 말라
+- 기존 컴포넌트의 metadata.strategy·reason·replaces는 변경하지 말라 (is_new, patched_by_feedback 제외)
+- Output ONLY raw JSON, no markdown fences.
+"""
+
+MODERNIZE_PATCH_USER_TEMPLATE = """\
+[부분 수정 요청]
+원래 현대화 요구사항: {requirements}
+
+사용자 피드백 (이것만 반영하라):
+{feedback}
+{keep_constraints}{analysis_context}\
+현재 승인된 현대화 아키텍처 (이 JSON을 기반으로 최소 수정):
+{current_modern_json}
+"""
+
 # ── 2단계 현대화: Phase 1 스켈레톤 생성 ──────────────────────────────────────
 
 MODERNIZE_SKELETON_PROMPT = """\
@@ -560,6 +625,161 @@ Do NOT output JSON until you feel confident about the core architecture.
 Do NOT ask for every detail — reasonable defaults are fine.
 Omit optional fields rather than guessing.
 Focus on: component types, key technologies, hosting environment, main data flows.
+"""
+
+# ── 멀티 퍼스펙티브 아키텍처 분석 ────────────────────────────────────────────
+
+MULTI_PERSPECTIVE_PROMPT = """\
+당신은 8개의 전문 아키텍처 관점을 대표하는 아키텍처 위원회입니다.
+각 관점에서 독립적으로 레거시 시스템을 분석하고, 마지막에 협업 종합 결론을 도출하십시오.
+
+=== 8대 아키텍처 관점 ===
+
+**SA (Solution Architecture — 솔루션 아키텍처)**
+- 비즈니스 목표와 IT 솔루션의 정합성 평가
+- 전체 시스템 적합성, ROI, 전략적 방향 검토
+- 현대화 시나리오(full_replace/partial/additive)의 비즈니스 근거
+
+**AA (Application Architecture — 애플리케이션 아키텍처)**
+- 애플리케이션 계층 구조, 결합도·응집도 평가
+- API 설계, 서비스 경계, 도메인 모델 분리 수준
+- 마이크로서비스 분해 가능성과 우선순위
+
+**DA (Data Architecture — 데이터 아키텍처)**
+- 데이터 모델, 데이터 흐름, 데이터 소유권 평가
+- 데이터 사일로, 중복, 일관성 문제 식별
+- 데이터 현대화(Data Lakehouse/Mesh/Real-time) 기회
+
+**IA (Infrastructure Architecture — 인프라 아키텍처)**
+- 호스팅 환경(온프레미스/클라우드), 인프라 탄력성 평가
+- 단일 장애점(SPOF), 고가용성, 재해 복구 설계 검토
+- 클라우드 이전 전략(Rehost/Replatform/Refactor)
+
+**TA (Technical Architecture — 기술 아키텍처)**
+- 기술 스택의 최신성, EOL/EOS 위험 평가
+- 기술 부채 우선순위, 플랫폼 통합 가능성
+- DevSecOps, CI/CD, IaC 성숙도
+
+**SWA (Software Architecture — 소프트웨어 아키텍처)**
+- 소프트웨어 설계 원칙(SOLID, DRY, KISS) 준수 수준
+- 레이어드/헥사고날/클린 아키텍처 적용 가능성
+- 코드 재사용성, 테스트 가능성, 유지보수성
+
+**DBA (Database Architecture — 데이터베이스 아키텍처)**
+- 데이터베이스 유형 적합성(RDBMS/NoSQL/NewSQL/그래프)
+- 쿼리 성능, 인덱스 전략, 파티셔닝·샤딩 필요성
+- DB 현대화(Managed DB/서비스별 독립 DB/폴리글랏 퍼시스턴스)
+
+**QA (Quality Architecture — 품질 아키텍처)**
+- 비기능 요구사항(성능·가용성·보안·확장성) 충족 수준
+- 관찰 가능성(Observability), 테스트 전략, SLO/SLA 정의
+- 품질 위험 요소와 개선 로드맵
+
+=== 분석 지침 ===
+- 각 관점은 자신의 전문 영역에서 독립적으로 3~5가지 핵심 concerns, recommendations, risks를 도출
+- score는 현재 아키텍처의 해당 관점 품질 (0=심각, 50=보통, 100=우수)
+- 관점 간 충돌(예: 성능 vs 비용, 보안 강화 vs 개발 속도)이 있으면 conflict_areas에 명시
+- priority_actions는 모든 관점이 공통으로 동의하는 최우선 실행 과제 (최소 3개, 최대 6개)
+
+=== 출력 JSON 스키마 ===
+{
+  "perspectives": [
+    {
+      "perspective": "sa|aa|da|ia|ta|swa|dba|qa",
+      "concerns": ["string", ...],
+      "recommendations": ["string", ...],
+      "risks": ["string", ...],
+      "score": 0-100,
+      "rationale": "점수 근거"
+    }
+  ],
+  "consensus_summary": "모든 관점의 공통 합의 사항 요약",
+  "conflict_areas": ["관점 간 충돌 영역", ...],
+  "priority_actions": ["최우선 실행 과제", ...]
+}
+
+8개 관점 모두를 포함하여 출력하십시오.
+"""
+
+# ── 멀티 퍼스펙티브 설계 검증 ─────────────────────────────────────────────────
+
+MULTI_PERSPECTIVE_DESIGN_PROMPT = """\
+당신은 8개의 전문 아키텍처 관점을 대표하는 설계 검증 위원회입니다.
+제시된 현대화 설계안을 각 관점에서 독립적으로 검토하고, 설계 권고·보완 사항을 도출하십시오.
+
+=== 검토 목적 ===
+레거시 시스템을 현대화한 설계안이 각 아키텍처 관점에서 적절히 설계되었는지 검증합니다.
+단순 리뷰가 아니라, 각 관점에서 **빠진 설계 요소를 식별하고 구체적인 보완 방향을 제시**하는 것이 목표입니다.
+
+=== 8대 아키텍처 관점별 검증 포인트 ===
+
+**SA (Solution Architecture — 솔루션 아키텍처)**
+- 비즈니스 목표와 설계안의 정합성: 현대화 요구사항이 설계에 반영되었는가?
+- 전체 솔루션 적합성: 시나리오(full_replace/partial/additive)에 맞는 설계인가?
+- ROI 관점: 과잉 설계 또는 과소 설계 여부
+
+**AA (Application Architecture — 애플리케이션 아키텍처)**
+- 서비스 분해 적절성: 도메인 경계(Bounded Context)가 명확히 분리되었는가?
+- 결합도·응집도: 서비스 간 의존성이 최소화되었는가?
+- API 설계: Gateway·BFF 패턴 적용 여부
+
+**DA (Data Architecture — 데이터 아키텍처)**
+- 데이터 소유권: 각 서비스가 자신의 데이터를 독립적으로 소유하는가?
+- 데이터 흐름: 레거시 데이터 마이그레이션 경로가 설계에 반영되었는가?
+- 실시간·배치 통합: 데이터 파이프라인 설계가 적절한가?
+
+**IA (Infrastructure Architecture — 인프라 아키텍처)**
+- 고가용성: 단일 장애점(SPOF)이 제거되었는가?
+- 확장성: 수평 확장 가능한 구조인가?
+- 클라우드 네이티브: 관리형 서비스 활용이 적절한가?
+
+**TA (Technical Architecture — 기술 아키텍처)**
+- 기술 스택 현대성: EOL 기술이 제거되고 최신 기술로 교체되었는가?
+- DevSecOps: CI/CD·IaC·보안 자동화 컴포넌트가 포함되었는가?
+- 기술 표준화: 중복 기술 스택 없이 표준화되었는가?
+
+**SWA (Software Architecture — 소프트웨어 아키텍처)**
+- 아키텍처 패턴: 헥사고날·클린 아키텍처·CQRS 등 설계 원칙 적용 여부
+- 모듈성: 컴포넌트가 단일 책임 원칙에 따라 설계되었는가?
+- 테스트 가능성: 의존성 주입·계층 분리 등 테스트 친화적 구조인가?
+
+**DBA (Database Architecture — 데이터베이스 아키텍처)**
+- DB 유형 적합성: 각 서비스에 적합한 DB 종류(RDBMS/NoSQL/캐시)가 선택되었는가?
+- Database-per-Service: 공유 DB 안티패턴이 제거되었는가?
+- 성능·확장: 캐싱·읽기 복제·샤딩 전략이 포함되었는가?
+
+**QA (Quality Architecture — 품질 아키텍처)**
+- 관찰 가능성: Metrics·Traces·Logs 3기둥이 설계에 포함되었는가?
+- 보안: Zero Trust·WAF·IAM 등 보안 컴포넌트가 충분한가?
+- 복원력: Circuit Breaker·Bulkhead·Retry 패턴이 설계에 반영되었는가?
+
+=== 분석 지침 ===
+- 각 관점은 **현대화 설계안 기준**으로 독립 검토 (레거시 문제 재언급 지양)
+- concerns: 현대화 설계에서 여전히 부족한 부분
+- recommendations: 구체적인 설계 보완 방향 (컴포넌트·패턴·기술 명시)
+- risks: 현재 설계대로 운영 시 발생 가능한 위험
+- score: 현대화 설계의 해당 관점 완성도 (0=미흡, 50=보통, 100=우수)
+- conflict_areas: 관점 간 충돌 (예: 보안 강화 vs 성능, 비용 절감 vs 고가용성)
+- priority_actions: 설계 보완을 위해 가장 시급한 실행 과제
+
+=== 출력 JSON 스키마 ===
+{
+  "perspectives": [
+    {
+      "perspective": "sa|aa|da|ia|ta|swa|dba|qa",
+      "concerns": ["현대화 설계의 부족한 점", ...],
+      "recommendations": ["구체적 설계 보완 방향", ...],
+      "risks": ["운영 위험", ...],
+      "score": 0-100,
+      "rationale": "점수 근거"
+    }
+  ],
+  "consensus_summary": "위원회 공통 합의 — 설계의 강점과 필수 보완 사항",
+  "conflict_areas": ["관점 간 충돌 영역 (트레이드오프)", ...],
+  "priority_actions": ["설계 보완 최우선 과제 (실행 가능한 형태로)", ...]
+}
+
+8개 관점 모두를 포함하여 출력하십시오.
 """
 
 # ── 재귀적 메타 인지 (RMC) — 분석 자기평가 ───────────────────────────────────

@@ -19,7 +19,6 @@ from archpilot.core.models import (
     ComponentType,
     Connection,
     Criticality,
-    DataClassification,
     HostType,
     LifecycleStatus,
     SystemModel,

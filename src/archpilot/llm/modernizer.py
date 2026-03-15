@@ -10,6 +10,7 @@ from archpilot.core.models import AnalysisResult, ModernizationScenario, SystemM
 from archpilot.core.parser import SystemParser
 from archpilot.llm.client import LLMError, get_client
 from archpilot.llm.prompts import (
+    LLM_JSON_SUFFIX,
     MIGRATION_PLAN_PROMPT,
     MODERNIZE_SKELETON_PROMPT,
     MODERNIZE_SYSTEM_PROMPT,
@@ -26,12 +27,6 @@ from archpilot.llm.utils import (
 )
 
 _console = Console(stderr=True)
-
-_SCENARIO_LABELS: dict[ModernizationScenario, str] = {
-    ModernizationScenario.FULL_REPLACE: "전체 교체 — 아키텍처를 완전히 새로 설계",
-    ModernizationScenario.PARTIAL: "일부 보존 — 핵심 컴포넌트 유지, 주변부·통합 레이어 현대화",
-    ModernizationScenario.ADDITIVE: "신규 추가 — 기존 시스템 유지, 신규 기능·채널만 추가",
-}
 
 # A2 재시도 횟수 상한 (1 = 최초 시도 + 1회 교정)
 _MAX_RETRY = 1
@@ -102,8 +97,7 @@ class SystemModernizer:
         )
 
     def _build_scenario_section(self, resolved: ModernizationScenario) -> str:
-        label = _SCENARIO_LABELS.get(resolved, resolved.value)
-        return f"\n\nscenario: {resolved.value}\n시나리오 설명: {label}"
+        return f"\n\nscenario: {resolved.value}\n시나리오 설명: {resolved.label}"
 
     def _build_analysis_section(
         self,
@@ -139,10 +133,25 @@ class SystemModernizer:
         decisions_by_id: dict[str, str] = {}
         retire_ids: set[str] = set()
         if analysis:
+            legacy_ids = {c.id for c in legacy.components}
+            stale_ids = []
             for d in analysis.component_decisions:
                 decisions_by_id[d.component_id] = d.action.value
                 if d.action.value == "retire":
                     retire_ids.add(d.component_id)
+                if d.component_id not in legacy_ids:
+                    stale_ids.append(d.component_id)
+            if stale_ids:
+                _console.print(
+                    f"[yellow]⚠ 분석 결과의 component_decisions에 현재 시스템에 없는 "
+                    f"ID {len(stale_ids)}개가 포함됩니다 (stale analysis): "
+                    f"{stale_ids[:5]}{'...' if len(stale_ids) > 5 else ''}\n"
+                    f"  → 해당 결정은 무시됩니다. 시스템 변경 후 재분석을 권장합니다.[/yellow]"
+                )
+                # stale ID는 decisions에서 제외 (잘못된 retire 판정 방지)
+                for sid in stale_ids:
+                    decisions_by_id.pop(sid, None)
+                    retire_ids.discard(sid)
 
         lines = []
         for c in legacy.components:
@@ -201,7 +210,7 @@ class SystemModernizer:
                     f"[재설계 요청 — {attempt}차 교정]\n"
                     f"이전 응답에서 다음 {len(missing)}개 컴포넌트가 누락됐습니다:\n"
                     + "\n".join(f"  - {id}" for id in missing)
-                    + f"\n\n위 컴포넌트를 반드시 포함하여 전체 아키텍처를 재설계하십시오.\n\n"
+                    + "\n\n위 컴포넌트를 반드시 포함하여 전체 아키텍처를 재설계하십시오.\n\n"
                     + user_message
                 )
 
@@ -221,6 +230,10 @@ class SystemModernizer:
                 _console.print(
                     f"[yellow]⚠ {_MAX_RETRY}차 재시도 후에도 {len(missing)}개 컴포넌트 누락: "
                     f"{missing[:5]}{'...' if len(missing) > 5 else ''}[/yellow]"
+                )
+                # 누락 정보를 metadata에 기록하여 상위 레이어가 경고를 표시할 수 있게 함
+                modern = modern.model_copy(
+                    update={"metadata": {**modern.metadata, "_missing_components": missing}}
                 )
 
         return modern  # type: ignore[return-value]
@@ -314,8 +327,7 @@ class SystemModernizer:
         )
 
         data = client.chat_json(
-            MODERNIZE_SYSTEM_PROMPT
-            + "\nIMPORTANT: Output ONLY raw JSON, no markdown fences.",
+            MODERNIZE_SYSTEM_PROMPT + LLM_JSON_SUFFIX,
             enrich_msg,
             max_tokens=MAX_MODERNIZE_TOKENS,
         )

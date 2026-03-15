@@ -67,7 +67,6 @@ def export(
     from archpilot.config import settings
     from archpilot.core.models import AnalysisResult, SystemModel
     from archpilot.core.diff import SystemDiff
-    from archpilot.ui import session as sess
 
     output_dir = (output_dir or settings.output_dir).resolve()
     dest = (dest or Path.cwd() / "dist").resolve()

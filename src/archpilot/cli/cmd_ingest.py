@@ -51,7 +51,7 @@ def ingest(
         model = SystemParser().from_file(file, use_llm=not no_llm)
     except ParseError as e:
         console.print(f"[red]파싱 오류:[/red] {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     output.mkdir(parents=True, exist_ok=True)
     system_json_path = output / "system.json"

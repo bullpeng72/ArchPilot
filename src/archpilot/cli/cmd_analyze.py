@@ -38,7 +38,7 @@ def analyze(
         result = SystemAnalyzer().analyze(model, requirements=requirements)
     except Exception as e:
         console.print(f"[red]분석 실패: {e}[/red]", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     analysis_path = output_dir / "analysis.json"
     analysis_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")

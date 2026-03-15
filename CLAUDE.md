@@ -1,4 +1,4 @@
-# ArchPilot — CLAUDE.md `v0.2.3`
+# ArchPilot — CLAUDE.md `v0.2.4`
 
 ## 프로젝트 개요
 
@@ -30,15 +30,17 @@ archpilot/
 │       │   ├── cmd_serve.py     # archpilot serve / export
 │       │   └── cmd_drawio.py    # archpilot drawio (setup/edit/watch/export)
 │       ├── core/
-│       │   ├── models.py        # Pydantic SystemModel, Component, Connection, AnalysisResult
-│       │   ├── parser.py        # YAML/JSON/텍스트 → SystemModel
-│       │   ├── diff.py          # Legacy vs Modern 비교 유틸
-│       │   ├── tech_ontology.py # 기술 스택 온톨로지 (자동 타입 추론)
-│       │   └── drawio_config.py # draw.io Desktop 설정/LevelDB 통합
+│       │   ├── models.py               # Pydantic SystemModel, Component, Connection, AnalysisResult
+│       │   ├── parser.py               # YAML/JSON/텍스트 → SystemModel
+│       │   ├── diff.py                 # Legacy vs Modern 비교 유틸
+│       │   ├── tech_ontology.py        # 기술 스택 온톨로지 (자동 타입 추론)
+│       │   ├── transformation_patterns.py  # DT/AI 변환 패턴 27개 (DT 16 + AI 11)
+│       │   └── drawio_config.py        # draw.io Desktop 설정/LevelDB 통합
 │       ├── llm/
 │       │   ├── client.py        # OpenAI 비동기 클라이언트 래퍼 (스트리밍 지원)
 │       │   ├── prompts.py       # 프롬프트 템플릿 (상수)
-│       │   ├── utils.py         # LLM 관련 상수 (MAX_ANALYZE_TOKENS 등)
+│       │   ├── utils.py         # LLM 관련 상수 및 압축 유틸 (MAX_ANALYZE_TOKENS 등)
+│       │   ├── grounding.py     # 패턴 기반 LLM 그라운딩 (build_pattern_grounding)
 │       │   ├── analyzer.py      # 레거시 시스템 분석
 │       │   ├── modernizer.py    # 현대화 설계 생성
 │       │   └── parser_agent.py  # 자연어 텍스트 → SystemModel
@@ -71,7 +73,13 @@ archpilot/
 │   ├── test_drawio_config.py
 │   ├── test_mingrammer.py
 │   ├── test_ui_server.py
-│   └── test_diff.py
+│   ├── test_diff.py
+│   ├── test_grounding.py
+│   ├── test_llm_utils.py
+│   ├── test_modernizer.py
+│   ├── test_routers_analyze.py
+│   ├── test_routers_modernize.py
+│   └── test_transformation_patterns.py
 ├── examples/
 │   ├── legacy_ecommerce.yaml
 │   ├── legacy_bank.yaml
@@ -134,7 +142,7 @@ archpilot init                        # .env 초기화 마법사
 archpilot ingest <file> [options]     # 레거시 시스템 파일 주입
 archpilot analyze <system.json>       # LLM 분석 보고서 생성
 archpilot modernize <system.json>     # LLM 현대화 설계 생성
-archpilot serve <output_dir>          # 인터랙티브 UI + reveal.js 서버 실행
+archpilot serve [output_dir]          # 인터랙티브 UI + reveal.js 서버 실행
 archpilot export [output_dir]         # 발표 슬라이드 → 정적 HTML 내보내기 (dist/)
 
 # draw.io Desktop 통합 서브커맨드
@@ -217,12 +225,38 @@ output/
 | POST | `/api/ingest/drawio` | draw.io XML 주입 |
 | POST | `/api/chat/ingest/stream` | 대화형 시스템 입력 (SSE) |
 | GET | `/api/analyze/stream` | LLM 분석 스트리밍 (SSE) |
-| POST | `/api/modernize/stream` | LLM 현대화 설계 스트리밍 (SSE) |
+| POST | `/api/modernize/stream` | LLM 현대화 설계 스트리밍 (SSE, `feedback` 파라미터로 부분 수정 지원) |
 | GET | `/api/diagram/{step}` | 다이어그램 다운로드 (mermaid/drawio) |
+| GET | `/api/download/{step}` | 시스템 모델 다운로드 (`?fmt=yaml\|json\|drawio`) |
 
 ---
 
 ## 📝 변경 이력
+
+### v0.2.4 (2026-03-15) — 데이터 흐름 개선 & DT/AI 패턴 확장 & 부분 수정
+
+- ✨ `ui/schemas.py` — `ModernizeRequest`에 `feedback: str | None` 필드 추가 (부분 수정 지시사항)
+- ✨ `ui/session.py` — `AppSession`에 `last_feedback`, `patch_history` 필드 추가
+- ✨ `llm/prompts.py` — `MODERNIZE_PATCH_SYSTEM_PROMPT`, `MODERNIZE_PATCH_USER_TEMPLATE` 신규 (부분 수정 전용)
+- ✨ `ui/routers/modernize.py` — `_is_patch_mode()`, `_build_patch_context()`, `_stream_patch()` 헬퍼 추가
+  - Patch mode: `feedback` 있고 `s.modern` 존재 시 → LLM 2-pass (patch + migration plan만 재생성), RMC 보존
+  - `_build_patch_context()`: `keep`/`rehost` 변경 금지 제약 + 분석 컨텍스트(component_decisions·pain_points·design_philosophy)를 패치 LLM에 주입
+- ✨ `ui/server.py` — `GET /api/download/{step}?fmt=yaml|json|drawio` 엔드포인트 추가
+- 🐛 `ui/server.py` — `Content-Disposition` 헤더 한글 파일명 500 오류 수정 (non-ASCII → ASCII-safe + RFC 5987 `filename*`)
+- ✨ `ui/templates/app.html.j2` — 전체 재생성/부분 수정 토글 UI, feedback textarea, YAML/drawio/JSON 다운로드 버튼 추가
+- ✅ 신규 테스트 12개 추가 (test_routers_modernize: _is_patch_mode 5, _build_patch_context 10, patch_context_to_llm 4) — 총 313개 통과
+- 🔧 `core/models.py` — `_validate_connections()` dropped connection을 `metadata["_dropped_connections"]`에 기록
+- 🔧 `llm/utils.py` — `compress_system_dict()` 3단계: metadata 전체 삭제 → strategy/reason/replaces/is_new 보존 후 최후 수단에서만 삭제
+- 🔧 `llm/utils.py` — `compress_analysis()` 2·3단계: multi_perspective consensus_summary + priority_actions 보존
+- 🔧 `llm/modernizer.py` — stale analysis 감지: component_decisions ID가 현재 시스템에 없으면 경고 후 제외
+- 🔧 `llm/modernizer.py` — A2 재시도 후 누락 컴포넌트를 `metadata["_missing_components"]`에 기록
+- ✨ `ui/session.py` — `busy(operation)` 컨텍스트 매니저: 스트리밍 중 ingest 충돌 방지 (409 반환)
+- ✨ `ui/routers/ingest.py` — busy 체크 + draw.io 파서에 tech_ontology 보강(`enrich_component`) 적용
+- ✨ `ui/routers/analyze.py` / `modernize.py` — `with s.busy()` 적용, dropped connections / missing components warning SSE 방출
+- ✨ `core/transformation_patterns.py` — DT 패턴 4개 신규 (saga_pattern, cicd_devops, infrastructure_as_code, cache_aside)
+- ✨ `core/transformation_patterns.py` — AI 패턴 3개 신규 (llm_guardrails, llm_finetuning, ai_observability)
+- 🐛 `core/transformation_patterns.py` — tech_triggers 수정: EDA(activemq/tibco/jms), Feature Flag(jenkins/gitlab), Semantic Cache(claude/embedding)
+- ✅ 신규 테스트 120개 추가 (test_routers_analyze 19, test_routers_modernize 35, test_transformation_patterns 27, 기타) — 총 301개 통과
 
 ### v0.2.3 (2026-03-15) — UI 리포트 패널 개편 & 대형 시스템 현대화 강화
 
@@ -269,8 +303,8 @@ output/
 - 🔧 `config.py` — `output_dir` field_validator로 항상 절대 경로 보장
 - 🔧 `cmd_init.py` — 전역 `~/.archpilot/config.env`에 저장, `ARCHPILOT_OUTPUT_DIR` 절대 경로 기록
 - 🔧 `cmd_ingest.py`, `cmd_serve.py`, `cmd_drawio.py` — `--output` 기본값 `settings.output_dir`로 통일 (CWD 무관)
-- 📝 `docs/ARCHITECTURE.md` — `config.py` 코드 예시 현행화
-- 📝 `docs/SPEC.md`, `docs/USER_GUIDE.md` — `init` 동작 설명 현행화
+- 📝 `docs/6_ARCHITECTURE.md` — `config.py` 코드 예시 현행화
+- 📝 `docs/7_SPEC.md`, `docs/3_USER_GUIDE.md` — `init` 동작 설명 현행화
 
 ### v0.2.0 (2026-03-13) — 아키텍처 문서화 완료 및 PyPI 배포 준비
 
@@ -280,8 +314,8 @@ output/
 - ✨ `core/drawio_config.py` — Electron LevelDB 직접 주입으로 draw.io Desktop 설정 자동화
 - ✨ `ui/server.py` — Flask → FastAPI + SSE 스트리밍 전환
 - ✨ `ui/session.py` — 인메모리 세션 관리
-- ✨ `archpilot drawio export` — draw.io → system.json 변환 커맨드 추가
-- 📝 `docs/ARCHITECTURE.md` — TechOntology·DrawioParser·DrawioConfig·FastAPI 섹션 신규 작성
-- 📝 `docs/ONTOLOGY.md` — 입력 표준화 파이프라인 및 온톨로지 상세 문서 신규 작성
-- 📝 `docs/USER_GUIDE.md` — 5가지 입력 시나리오 실전 가이드 신규 작성
+- ✨ `archpilot drawio export` — system.json → draw.io XML 내보내기 커맨드 추가
+- 📝 `docs/6_ARCHITECTURE.md` — TechOntology·DrawioParser·DrawioConfig·FastAPI 섹션 신규 작성
+- 📝 `docs/4_GROUNDING.md` — 입력 표준화 파이프라인 및 온톨로지 상세 문서 신규 작성
+- 📝 `docs/3_USER_GUIDE.md` — 5가지 입력 시나리오 실전 가이드 신규 작성
 - 🔧 `pyproject.toml` — PyPI 배포용 메타데이터 완성 (classifiers, keywords, authors)

@@ -2,7 +2,7 @@
 
 > 설치부터 발표 자료까지 — 단계별 워크플로우
 
-**Version**: 0.2.3 | **Last Updated**: 2026-03-15
+**Version**: 0.2.4 | **Last Updated**: 2026-03-15
 
 ---
 
@@ -20,6 +20,8 @@
 10. [발표 자료 생성](#10-발표-자료-생성)
 11. [출력 파일 구조](#11-출력-파일-구조)
 12. [FAQ](#12-faq)
+
+> **새 기능 (v0.2.4)**: §8.5 [현대화 설계 부분 수정](#85-부분-수정-patch-모드)  — 기존 결과를 유지하며 피드백으로 최소 수정
 
 ---
 
@@ -47,8 +49,8 @@ archpilot init
 ```
 ArchPilot 초기화 마법사
 
-OpenAI API Key: sk-...
-모델 [gpt-4o]: ↵
+OpenAI API Key (sk-...):        ← 입력 내용이 화면에 표시되지 않습니다 (보안)
+사용할 모델 [gpt-4o-mini]: ↵
 출력 디렉토리 [/home/yourname/project/output]: ↵
 
 ✅ 설정 파일이 생성되었습니다: /home/yourname/.archpilot/config.env
@@ -57,10 +59,17 @@ OpenAI API Key: sk-...
 생성된 `~/.archpilot/config.env`:
 ```env
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_MAX_TOKENS=4096
 ARCHPILOT_OUTPUT_DIR=/home/yourname/project/output
+ARCHPILOT_DIAGRAM_FORMAT=png
+ARCHPILOT_SERVER_HOST=127.0.0.1
 ARCHPILOT_SERVER_PORT=8080
 ```
+
+> **고품질 분석이 필요한 경우** `OPENAI_MODEL=gpt-4o` 로 변경하세요.
+> **팁**: 전역 설정은 어느 디렉토리에서 실행해도 자동 로드됩니다.
+> 프로젝트별 다른 설정이 필요하면 해당 디렉토리에 `.env`를 만들면 전역 설정을 오버라이드합니다.
 
 > **팁**: 전역 설정은 어느 디렉토리에서 실행해도 자동 로드됩니다.
 > 프로젝트별 다른 설정이 필요하면 해당 디렉토리에 `.env`를 만들면 전역 설정을 오버라이드합니다.
@@ -131,10 +140,14 @@ connections:
 또는 제공된 예제 파일 사용:
 ```bash
 ls examples/
-# legacy_bank.yaml
-# legacy_ecommerce.yaml
-# hybrid_cloud_government.yaml
-# hybrid_cloud_manufacturing.yaml
+# legacy_bank.yaml                    # 코어뱅킹 레거시 (9개 컴포넌트)
+# legacy_ecommerce.yaml               # 온프레미스 쇼핑몰 모놀리스
+# hybrid_cloud_government.yaml        # 공공기관 하이브리드 클라우드
+# hybrid_cloud_hospital.yaml          # 의료기관 하이브리드 클라우드
+# hybrid_cloud_manufacturing.yaml     # 제조업 MES/ERP 하이브리드
+# large_scale_fintech.yaml            # 대규모 핀테크 (20개+ 컴포넌트)
+# large_scale_logistics.yaml          # 대규모 물류 플랫폼
+# large_scale_streaming_platform.yaml # 대규모 스트리밍 서비스
 ```
 
 ### Step 2: ingest
@@ -146,25 +159,30 @@ archpilot ingest examples/legacy_bank.yaml --format mermaid,drawio
 **옵션:**
 ```
 --output, -o    출력 디렉토리 (기본: settings.output_dir)
---format, -f    출력 포맷: mermaid,png,drawio (기본: mermaid)
---no-llm        LLM 비활성화 (구조화 파일 전용)
+--format, -f    출력 포맷: mermaid,png,svg,drawio (기본: mermaid)
+--no-llm        LLM 비활성화 (YAML/JSON 전용, .txt 불가)
+--force         기존 출력 덮어쓰기 (확인 프롬프트 생략)
 ```
 
 **출력:**
 ```
 📂 파일 파싱 중: examples/legacy_bank.yaml
+🎨 다이어그램 생성 중: mermaid, drawio
 
-┌──────────────────────── ArchPilot — Ingest 완료 ────────────────────────┐
-│ 시스템      │ Core Banking Legacy System                                  │
-│ 컴포넌트 수 │ 9                                                           │
-│ 연결 수     │ 8                                                           │
-├─────────────┼───────────────────────────────────────────────────────────┤
-│ mermaid     │ ✅ output/legacy/diagram.mmd                               │
-│ drawio      │ ✅ output/legacy/diagram.drawio                            │
-└─────────────┴───────────────────────────────────────────────────────────┘
+        ArchPilot — Ingest 완료
+ 항목          값
+ 시스템        Core Banking Legacy System
+ 설명          2005년 구축된 온프레미스 코어뱅킹 시스템
+ 컴포넌트 수   9
+ 연결 수        8
+ system.json   output/system.json
+ ──────────────────────────────────────
+ mermaid        ✅ output/legacy/diagram.mmd
+ drawio         ✅ output/legacy/diagram.drawio
 
 ⚠  EOL/Deprecated 컴포넌트 3개: Oracle DB (운영), 웹 포털 (IIS), 배치 처리 서버
 🔴 HIGH 중요도 컴포넌트 2개: 코어 뱅킹 서버, HSM (암호화 모듈)
+🔒 민감 데이터 컴포넌트 1개: Oracle DB (운영)
 
 다음 단계: archpilot analyze output/system.json
 ```
@@ -179,8 +197,8 @@ archpilot analyze output/system.json \
 **옵션:**
 ```
 --requirements, -r   현대화 목표 (component_decisions 품질에 직접 영향)
---output, -o         분석 결과 저장 디렉토리
---verbose, -v        상세 출력 (전체 문제점·기술부채·기회 목록)
+--output, -o         분석 결과 저장 디렉토리 (기본: system.json 위치)
+--verbose, -v        문제점·기술부채·현대화 기회 전체 목록 출력
 ```
 
 `-r`(요구사항) 없이 분석하면 AI가 목표를 모르는 상태에서 6R 결정을 내립니다.
@@ -398,14 +416,28 @@ AWS EKS 전환, Oracle → Aurora PostgreSQL, 제로 다운타임 배포
   ○ 신규 추가 (additive)
 ```
 
-"현대화 설계 생성" 클릭 → 4-pass RMC 파이프라인 실행:
+"현대화 설계 생성" 클릭 → 5-pass RMC 파이프라인 실행:
 
+**일반 시스템 (20개 미만):**
 ```
 [10%] 새로운 아키텍처를 설계하고 있습니다...
 [60%] 시스템 모델을 파싱하고 있습니다...
-[70%] 마이그레이션 플랜을 작성하고 있습니다...
+[65%] 🏛️ 8대 아키텍처 관점에서 설계안을 검증하고 있습니다...
+[75%] 마이그레이션 플랜을 작성하고 있습니다...
 [88%] 🧠 RMC: 설계 해설을 작성하고 있습니다...
 [95%] 🧠 RMC: 마이그레이션 계획을 자기검토하고 있습니다...
+[100%] 완료
+```
+
+**대형 시스템 (20개 이상 — 2단계 분할 생성):**
+```
+[8%]  🏗️ 대형 시스템 (N개) — Phase 1: 컴포넌트 구조 설계 중...
+[30%] ✅ Phase 1 완료 — Phase 2: 상세 설계 및 연결 생성 중...
+[60%] 시스템 모델을 파싱하고 있습니다...
+[65%] 🏛️ 8대 아키텍처 관점 설계 검증...
+[75%] 마이그레이션 플랜을 작성하고 있습니다...
+[88%] 🧠 RMC: 설계 해설...
+[95%] 🧠 RMC: 자기검토...
 [100%] 완료
 ```
 
@@ -492,8 +524,8 @@ archpilot modernize output/system.json \
 **옵션:**
 ```
 --requirements, -r   현대화 요구사항 (생략 시 대화형 입력)
---output, -o         출력 디렉토리
---format, -f         다이어그램 포맷: mermaid,png,drawio (기본: mermaid)
+--output, -o         출력 디렉토리 (기본: system.json 위치)
+--format, -f         다이어그램 포맷: mermaid,png,svg,drawio (기본: mermaid)
 --no-analysis        analysis.json 자동 참조 건너뜀
 ```
 
@@ -526,12 +558,72 @@ archpilot modernize output/system.json \
 10. 팀 역량 및 교육 계획
 11. 롤백 계획 — Blue/Green·Canary 전략
 
-### 8.4 대형 시스템 주의사항
+### 8.5 부분 수정 (Patch) 모드
 
-컴포넌트가 30개 이상인 경우 자동 압축이 실행됩니다:
+현대화 결과가 이미 있을 때, 전체를 재생성하지 않고 **특정 부분만 수정**할 수 있습니다.
+
+#### 언제 사용하나요?
+
+- 전체 방향은 맞지만 특정 컴포넌트 선택이나 명명이 마음에 들지 않을 때
+- 시나리오·요구사항은 그대로 두고 기술 스택만 바꾸고 싶을 때
+- 여러 번 반복 수정으로 결과를 점진적으로 개선할 때
+
+#### Web UI에서 사용하기
+
+현대화 완료 후 Step 3 패널 하단에 **"부분 수정"** 토글이 나타납니다:
 
 ```
-⚠ 대형 시스템: 12개 컴포넌트의 metadata/specs를 제거했습니다 (LLM 컨텍스트 20,000자 제한)
+[ 전체 재생성 ]  [ 부분 수정 ← 클릭 ]
+
+피드백 입력:
+┌──────────────────────────────────────────────────────┐
+│ API Gateway를 AWS API Gateway 대신 Kong으로 변경해줘. │
+│ Redis는 ElastiCache 대신 자체 Redis Cluster로.       │
+└──────────────────────────────────────────────────────┘
+
+[ 부분 수정 적용 ]
+```
+
+#### 동작 방식
+
+```
+[10%] 📝 피드백을 반영해 기존 아키텍처를 수정하고 있습니다...
+[55%] ✅ 시스템 모델 확정 — 마이그레이션 플랜 재생성 중...
+[100%] 완료 (부분 수정)
+```
+
+- **변경 금지**: 분석에서 `keep`/`rehost`로 결정된 컴포넌트는 수정하지 않음
+- **설계 일관성**: `design_philosophy`, `component_decisions`, `pain_points`를 자동으로 패치 LLM에 주입
+- **이력 기록**: 수정 이력이 `patch_history`에 누적됨
+- **RMC 재사용**: Design Rationale·자기평가 패스는 이전 결과 재사용 (속도 향상)
+
+#### 현대화 결과 다운로드
+
+부분 수정 후 또는 현대화 완료 후 결과 파일을 바로 다운로드할 수 있습니다:
+
+```
+[ YAML 저장 ]  [ draw.io 저장 ]  [ JSON 저장 ]
+```
+
+- **YAML**: ArchPilot 표준 입력 포맷으로 저장 (`from_id`/`to_id` → `from`/`to` 변환)
+- **draw.io**: 현대화된 다이어그램 XML (draw.io Desktop에서 바로 열기 가능)
+- **JSON**: `system.json` 원본 그대로 저장
+
+---
+
+### 8.4 대형 시스템 주의사항
+
+컴포넌트가 **20개 이상**이면 Web UI에서 자동으로 **2단계 분할 생성(Skeleton → Enrich)** 이 실행됩니다:
+
+```
+[8%]  🏗️ 대형 시스템 (24개) — Phase 1: 컴포넌트 구조 설계 중...
+[30%] ✅ Phase 1 완료 (26개) — Phase 2: 상세 설계 및 연결 생성 중...
+```
+
+컨텍스트 한도(`MAX_SYSTEM_CHARS = 40,000`) 초과 시 자동 압축 경고가 표시됩니다:
+
+```
+⚠ 대형 시스템: 12개 컴포넌트의 strategy/reason까지 제거했습니다 (LLM 컨텍스트 40,000자 제한)
 ```
 
 이 경고가 반복되면:
@@ -618,25 +710,41 @@ archpilot serve output/ --open
 - `O`: 개요 보기
 - 다이어그램 클릭: 모달 확대
 
-### 10.3 테마 변경
+### 10.3 포트 및 옵션
 
 ```bash
-archpilot serve output/ --theme moon
-# 사용 가능: black(기본), white, moon, sky, league, beige, serif, solarized
+archpilot serve output/ --port 9000 --host 0.0.0.0  # 팀 공유
+archpilot serve output/ --no-open                    # 브라우저 자동 열기 끔
+archpilot serve output/ --reload                     # 개발 모드 (코드 변경 시 자동 재시작)
 ```
 
-### 10.4 포트 변경
+`serve` 옵션:
+```
+--port, -p    서버 포트 (기본: 8080)
+--host        서버 호스트 (기본: 127.0.0.1)
+--open/--no-open  브라우저 자동 열기 (기본: --open)
+--reload      개발 모드 자동 재시작
+```
+
+### 10.4 정적 HTML 내보내기
 
 ```bash
-archpilot serve output/ --port 9000 --host 0.0.0.0
+# output/ 디렉토리 전체를 읽어 정적 슬라이드 생성
+archpilot export output/ --dest ./dist
+
+# 테마 지정 (기본: black)
+archpilot export output/ --dest ./dist --theme moon
 ```
 
-### 10.5 정적 HTML 내보내기
+테마 옵션: `black`(기본), `white`, `moon`, `sky`, `league`, `beige`, `serif`, `solarized`
 
-```bash
-archpilot export output/system.json --dest ./dist
-# dist/slides/index.html 생성 (CDN 의존, 인터넷 필요)
 ```
+dist/
+└── index.html   # reveal.js 정적 슬라이드 (CDN 의존, 인터넷 필요)
+```
+
+> `export` 명령은 `output/` 디렉토리에서 `system.json`, `analysis.json`, `modern/system.json`,
+> `modern/migration_plan.md`, `legacy/diagram.mmd`, `modern/diagram.mmd` 를 자동으로 읽습니다.
 
 ---
 
@@ -657,8 +765,8 @@ output/
 │   ├── diagram.drawio
 │   ├── migration_plan.md    # 마이그레이션 로드맵 (11섹션)
 │   └── design_rationale.json# 설계 해설 (Web UI에서만 생성)
-└── slides/
-    └── index.html           # reveal.js 정적 HTML (export 시)
+dist/                            # archpilot export 출력 (별도 디렉토리)
+└── index.html               # reveal.js 정적 HTML (CDN 의존)
 ```
 
 **`system.json` 주요 구조:**
@@ -707,13 +815,14 @@ output/
 - CLI: `output/analysis.json`에서 `recommended_scenario` 직접 편집 후 modernize 재실행
 - Web 앱: 시나리오 선택 드롭다운에서 변경 후 "현대화 설계 생성" 다시 클릭
 
-### Q. 대형 시스템(40개+ 컴포넌트)에서 component 수가 줄어들었어요
+### Q. 대형 시스템(20개+ 컴포넌트)에서 component 수가 줄어들었어요
 
-컨텍스트 압축으로 일부 정보가 누락되거나, LLM이 과도하게 통합했을 수 있습니다.
+20개 이상이면 Web UI에서 2단계 분할 생성(Skeleton → Enrich)을 자동 적용합니다.
+컴포넌트가 여전히 부족하게 생성되면 A2 교정 재생성이 자동 실행됩니다.
 
-해결책:
-1. `archpilot analyze -r "..."` 먼저 실행해 `component_decisions` 생성
-2. Web UI 사용 (4-pass RMC로 검증 강화)
+그래도 줄어든 경우:
+1. `archpilot analyze -r "..."` 먼저 실행해 `component_decisions` 생성 (체크리스트로 활용)
+2. Web UI 사용 (5-pass RMC + 자동 교정 강화)
 3. 시스템을 서브시스템 단위로 분리
 
 ### Q. PNG 다이어그램을 생성하려면?

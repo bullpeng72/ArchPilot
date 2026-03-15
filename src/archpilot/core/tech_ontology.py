@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -188,7 +188,6 @@ TECH_ONTOLOGY: dict[str, TechRecord] = {
     "sap s/4hana":    TechRecord("SAP S/4HANA",     "server",   "erp",        "SAP",        None, "commercial"),
     "abap":           TechRecord("ABAP",            "server",   "erp",        "SAP",        None, "commercial"),
     "sap":            TechRecord("SAP",             "server",   "erp",        "SAP",        None, "commercial"),
-    "abap":           TechRecord("ABAP",            "server",   "erp",        "SAP",        None, "commercial"),
     "ffmpeg":         TechRecord("FFmpeg",          "service",  "media-processing","Community",None),
     "ssl offload":    TechRecord("SSL Offload",     "loadbalancer","lb",       "Various",   None),
     "kql":            TechRecord("KQL",             "monitoring","query-lang", "Microsoft", None),
@@ -210,7 +209,6 @@ TECH_ONTOLOGY: dict[str, TechRecord] = {
     "snowflake":      TechRecord("Snowflake",       "database", "data-warehouse","Snowflake",None,"commercial"),
     "timestream":     TechRecord("Amazon Timestream","database","timeseries", "AWS",        None, "managed"),
     "influxdb":       TechRecord("InfluxDB",        "database", "timeseries", "InfluxData", None, "commercial"),
-    "opensearch":     TechRecord("OpenSearch",      "database", "nosql-search","AWS",       None, "managed"),
     "pinecone":       TechRecord("Pinecone",        "database", "vector-db",  "Pinecone",   None, "managed"),
     "qdrant":         TechRecord("Qdrant",          "database", "vector-db",  "Qdrant",     None),
     "weaviate":       TechRecord("Weaviate",        "database", "vector-db",  "Weaviate",   None),
@@ -330,7 +328,6 @@ TECH_ONTOLOGY: dict[str, TechRecord] = {
     "amazon cloudwatch":TechRecord("Amazon CloudWatch","monitoring","observability","AWS",  None, "managed"),
     "azure monitor":  TechRecord("Azure Monitor",   "monitoring","observability","Microsoft",None,"managed"),
     "google cloud monitoring":TechRecord("GCP Monitoring","monitoring","observability","GCP",None,"managed"),
-    "opentelemetry":  TechRecord("OpenTelemetry",   "monitoring","observability","CNCF",    None),
     "jaeger":         TechRecord("Jaeger",          "monitoring","tracing",   "CNCF",       None),
     "x-ray":          TechRecord("AWS X-Ray",       "monitoring","tracing",   "AWS",        None, "managed"),
     "aws x-ray":      TechRecord("AWS X-Ray",       "monitoring","tracing",   "AWS",        None, "managed"),
@@ -430,13 +427,11 @@ TECH_ONTOLOGY: dict[str, TechRecord] = {
     "onnx":             TechRecord("ONNX",             "service","ml-runtime",            "Microsoft",  None),
     "tensorflow":       TechRecord("TensorFlow",       "service","ml-framework",          "Google",     None),
     "pytorch":          TechRecord("PyTorch",          "service","ml-framework",          "Meta",       None),
-    "grpc":             TechRecord("gRPC",             "service","rpc-framework",         "Google",     None),
     "aws datasync":     TechRecord("AWS DataSync",     "service","data-transfer",         "AWS",        None, "managed"),
     "aws iot core":     TechRecord("AWS IoT Core",     "service","iot-platform",          "AWS",        None, "managed"),
     "looker":           TechRecord("Looker",           "service","bi-platform",           "Google",     None, "commercial"),
     "power bi":         TechRecord("Power BI",         "service","bi-platform",           "Microsoft",  None, "commercial"),
     "dbt":              TechRecord("dbt",              "service","data-transform",        "dbt Labs",   None),
-    "aws lambda":       TechRecord("AWS Lambda",       "service","serverless",            "AWS",        None, "managed"),
     "fargate":          TechRecord("AWS Fargate",      "service","serverless-container",  "AWS",        None, "managed"),
     "ecs":              TechRecord("Amazon ECS",       "service","container-svc",         "AWS",        None, "managed"),
     "cloud run":        TechRecord("Google Cloud Run", "service","serverless-container",  "GCP",        None, "managed"),
