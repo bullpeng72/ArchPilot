@@ -6,8 +6,13 @@ diagrams.net에서 직접 편집한 임의 XML도 최대한 복원한다.
 
 from __future__ import annotations
 
+import logging
 import re
-import xml.etree.ElementTree as ET
+
+import defusedxml.ElementTree as ET  # XXE-safe XML parser
+from defusedxml import DefusedXmlException
+
+_log = logging.getLogger(__name__)
 
 from archpilot.core.models import (
     Component,
@@ -22,113 +27,104 @@ from archpilot.core.models import (
 
 
 # ── 스타일 → ComponentType 역매핑 ─────────────────────────────────────────────
+#
+# 우선순위 순으로 정의된 (키워드, ComponentType) 쌍.
+# 앞에 위치할수록 먼저 매칭되며, 상호 배타적이지 않은 패턴은 순서가 중요하다.
+_STYLE_PATTERNS: list[tuple[str, ComponentType]] = [
+    # DATABASE — Cisco disk_storage, 실린더, flowchart 심볼, AWS Aurora/RDS
+    ("disk_storage",          ComponentType.DATABASE),
+    ("cylinder",              ComponentType.DATABASE),
+    ("flowchart.database",    ComponentType.DATABASE),
+    ("aws4.aurora",           ComponentType.DATABASE),
+    ("aws4.rds",              ComponentType.DATABASE),
+    # STORAGE — flowchart, Cisco 서버 심볼, AWS S3/Glacier
+    ("flowchart.stored_data", ComponentType.STORAGE),
+    ("cisco.servers",         ComponentType.STORAGE),
+    ("aws4.s3",               ComponentType.STORAGE),
+    ("aws4.glacier",          ComponentType.STORAGE),
+    # CLIENT — flowchart 터미네이터, Cisco PC 심볼
+    ("flowchart.terminator",  ComponentType.CLIENT),
+    ("cisco.computers",       ComponentType.CLIENT),
+    ("peripherals.pc",        ComponentType.CLIENT),
+    # QUEUE — flowchart delay, BPMN, AWS SQS/MQ
+    ("flowchart.delay",       ComponentType.QUEUE),
+    ("bpmn",                  ComponentType.QUEUE),
+    ("aws4.sqs",              ComponentType.QUEUE),
+    ("aws4.mq",               ComponentType.QUEUE),
+    # CACHE — AWS ElastiCache/Redis
+    ("aws4.elasticache",      ComponentType.CACHE),
+    ("aws4.redis",            ComponentType.CACHE),
+    # CDN — AWS CloudFront
+    ("aws4.cloudfront",       ComponentType.CDN),
+    # GATEWAY — AWS API Gateway
+    ("aws4.api_gateway",      ComponentType.GATEWAY),
+    # LOADBALANCER — AWS ELB/ALB
+    ("aws4.elb",              ComponentType.LOADBALANCER),
+    ("aws4.alb",              ComponentType.LOADBALANCER),
+    # SECURITY — flowchart.decision 다이아몬드 (rhombus와 상호 배타적)
+    ("flowchart.decision",    ComponentType.SECURITY),
+    # LOADBALANCER — rhombus (flowchart.decision 이후 체크하여 오분류 방지)
+    ("rhombus",               ComponentType.LOADBALANCER),
+]
+
+# Ellipse 셀 전용 색상 코드 매핑 (drawio.py STYLE_MAP의 fillColor/strokeColor 기반)
+# ⚠ drawio.py의 STYLE_MAP 색상 변경 시 여기도 동기화 필요
+_ELLIPSE_COLOR_PATTERNS: list[tuple[str, ComponentType]] = [
+    ("fff2cc", ComponentType.CACHE),    # Cache fillColor
+    ("d6b656", ComponentType.CACHE),    # Cache strokeColor
+    ("d5e8d4", ComponentType.CDN),      # CDN fillColor
+    ("82b366", ComponentType.CDN),      # CDN strokeColor
+]
+
+# 사각형 계열 색상 코드 매핑 (shape 키워드 미매칭 시 최후 수단)
+_COLOR_PATTERNS: list[tuple[str, ComponentType]] = [
+    ("arcsize=50", ComponentType.GATEWAY),     # Gateway: 둥근 모서리 50%
+    ("e1d5e7",     ComponentType.GATEWAY),     # Gateway fillColor
+    ("9673a6",     ComponentType.GATEWAY),     # Gateway strokeColor
+    ("arcsize=30", ComponentType.ESB),         # ESB: 둥근 모서리 30%
+    ("f0d0ff",     ComponentType.ESB),         # ESB fillColor
+    ("9933cc",     ComponentType.ESB),         # ESB strokeColor
+    ("ccccff",     ComponentType.MAINFRAME),   # Mainframe fillColor (남보라)
+    ("3333cc",     ComponentType.MAINFRAME),   # Mainframe strokeColor
+    ("fffacd",     ComponentType.MONITORING),  # Monitoring fillColor (연노랑)
+    ("d4ac0d",     ComponentType.MONITORING),  # Monitoring strokeColor
+    ("d5e8d4",     ComponentType.SERVICE),     # Service fillColor (초록)
+    ("82b366",     ComponentType.SERVICE),     # Service strokeColor
+    ("dae8fc",     ComponentType.SERVER),      # Server fillColor (파랑)
+    ("6c8ebf",     ComponentType.SERVER),      # Server strokeColor
+]
+
 
 def _style_to_type(style: str) -> ComponentType:
-    """mxCell style 문자열에서 ComponentType 추론."""
+    """mxCell style 문자열에서 ComponentType 추론.
+
+    매칭 우선순위:
+    1. shape/symbol 키워드 (_STYLE_PATTERNS)
+    2. ellipse 셀 — 색상 코드로 CACHE/CDN 구분 (_ELLIPSE_COLOR_PATTERNS)
+    3. 색상 코드 — 사각형 계열 (_COLOR_PATTERNS)
+    4. 기본값 SERVER (알 수 없는 스타일은 DEBUG 로그)
+    """
     s = style.lower()
 
-    # ── DATABASE ──────────────────────────────────────────────────────────────
-    # ArchPilot 기본 스타일 (Cisco disk_storage)
-    if "disk_storage" in s:
-        return ComponentType.DATABASE
-    # 국제 표준 실린더(Cylinder) 심볼
-    if "cylinder" in s:
-        return ComponentType.DATABASE
-    # Flowchart database 심볼
-    if "flowchart.database" in s:
-        return ComponentType.DATABASE
-    # AWS Aurora / RDS
-    if "aws4.aurora" in s or "aws4.rds" in s:
-        return ComponentType.DATABASE
+    # 1순위: 명시적 shape/symbol 키워드
+    for keyword, ctype in _STYLE_PATTERNS:
+        if keyword in s:
+            return ctype
 
-    # ── STORAGE ───────────────────────────────────────────────────────────────
-    if "flowchart.stored_data" in s:
-        return ComponentType.STORAGE
-    if "cisco.servers" in s:
-        return ComponentType.STORAGE
-    # AWS S3 / Glacier
-    if "aws4.s3" in s or "aws4.glacier" in s:
-        return ComponentType.STORAGE
-
-    # ── CLIENT ────────────────────────────────────────────────────────────────
-    if "flowchart.terminator" in s:
-        return ComponentType.CLIENT
-    if "cisco.computers" in s or "peripherals.pc" in s:
-        return ComponentType.CLIENT
-
-    # ── QUEUE ─────────────────────────────────────────────────────────────────
-    if "flowchart.delay" in s:
-        return ComponentType.QUEUE
-    if "bpmn" in s:
-        return ComponentType.QUEUE
-    # AWS SQS / Amazon MQ
-    if "aws4.sqs" in s or "aws4.mq" in s:
-        return ComponentType.QUEUE
-
-    # ── CACHE ─────────────────────────────────────────────────────────────────
-    # AWS ElastiCache / Redis
-    if "aws4.elasticache" in s or "aws4.redis" in s:
-        return ComponentType.CACHE
-
-    # ── CDN ───────────────────────────────────────────────────────────────────
-    # AWS CloudFront
-    if "aws4.cloudfront" in s:
-        return ComponentType.CDN
-
-    # ── GATEWAY ───────────────────────────────────────────────────────────────
-    # AWS API Gateway
-    if "aws4.api_gateway" in s:
-        return ComponentType.GATEWAY
-
-    # ── LOADBALANCER ──────────────────────────────────────────────────────────
-    if "rhombus" in s:
-        return ComponentType.LOADBALANCER
-    # AWS ELB / ALB
-    if "aws4.elb" in s or "aws4.alb" in s:
-        return ComponentType.LOADBALANCER
-
-    # ── Ellipse: ArchPilot 색상 코드로 판별, 미매칭은 SERVER(안전 기본값) ─────
+    # 2순위: ellipse — 색상으로 CACHE/CDN 구분, 나머지는 SERVER
     if "ellipse" in s:
-        # Cache: fillColor=#fff2cc
-        if "fff2cc" in s or "d6b656" in s:
-            return ComponentType.CACHE
-        # CDN: fillColor=#d5e8d4
-        if "d5e8d4" in s or "82b366" in s:
-            return ComponentType.CDN
-        # 색상 정보 없는 일반 타원 → SERVER (CACHE보다 안전한 기본값)
-        return ComponentType.SERVER
+        for color, ctype in _ELLIPSE_COLOR_PATTERNS:
+            if color in s:
+                return ctype
+        return ComponentType.SERVER  # 색상 정보 없는 일반 타원
 
-    # ── SECURITY: flowchart.decision 다이아몬드 (LOADBALANCER rhombus와 구분) ────
-    if "flowchart.decision" in s:
-        return ComponentType.SECURITY
+    # 3순위: 색상 코드 매칭 (사각형 계열)
+    for color, ctype in _COLOR_PATTERNS:
+        if color in s:
+            return ctype
 
-    # ── LOADBALANCER: rhombus ────────────────────────────────────────────────
-    # (위에서 flowchart.decision 먼저 처리했으므로 여기서 rhombus는 LB만 해당)
-    if "rhombus" in s:
-        return ComponentType.LOADBALANCER
-
-    # ── Gateway: arcSize=50 + 보라색 ──────────────────────────────────────────
-    if "arcsize=50" in s or ("e1d5e7" in s and "9673a6" in s):
-        return ComponentType.GATEWAY
-
-    # ── ESB: arcSize=30 + 연보라 (#f0d0ff / #9933cc) ─────────────────────────
-    if "arcsize=30" in s or "f0d0ff" in s or "9933cc" in s:
-        return ComponentType.ESB
-
-    # ── MAINFRAME: 남보라 (#ccccff / #3333cc) + 직각(rounded=0) ──────────────
-    if "ccccff" in s or "3333cc" in s:
-        return ComponentType.MAINFRAME
-
-    # ── MONITORING: 연노랑 (#fffacd / #d4ac0d) ───────────────────────────────
-    if "fffacd" in s or "d4ac0d" in s:
-        return ComponentType.MONITORING
-
-    # ── Service: 초록색 사각형 ─────────────────────────────────────────────────
-    if "d5e8d4" in s or "82b366" in s:
-        return ComponentType.SERVICE
-    # ── Server: 파란색 사각형 (ArchPilot 기본) ────────────────────────────────
-    if "dae8fc" in s or "6c8ebf" in s:
-        return ComponentType.SERVER
+    # 매칭 없음 — 기본값 SERVER
+    _log.debug("알 수 없는 draw.io 스타일, SERVER로 기본 설정: %.120s", style)
     return ComponentType.SERVER
 
 
@@ -235,6 +231,8 @@ def parse_drawio_xml(xml_str: str, system_name: str = "Imported System") -> Syst
         root = ET.fromstring(xml_str)
     except ET.ParseError as exc:
         raise ValueError(f"draw.io XML 파싱 실패: {exc}") from exc
+    except DefusedXmlException as exc:
+        raise ValueError(f"draw.io XML 보안 위협 차단 (XXE/DTD): {exc}") from exc
 
     all_cells = root.findall(".//mxCell")
 

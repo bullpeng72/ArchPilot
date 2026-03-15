@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 전역 설정 디렉토리: ~/.archpilot/
@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     # AliasChoices: OPENAI_API_KEY(접두어 없음) 또는 ARCHPILOT_OPENAI_API_KEY 모두 허용
     # pydantic-settings가 .env 파일을 직접 파싱해 두 이름 모두 검색하므로
     # os.environ 주입 없이도 동작한다.
-    openai_api_key: str = Field(
-        default="",
+    openai_api_key: SecretStr = Field(
+        default=SecretStr(""),
         validation_alias=AliasChoices("OPENAI_API_KEY", "ARCHPILOT_OPENAI_API_KEY"),
     )
     openai_model: str = "gpt-4o-mini"
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
         - FastAPI SSE 제너레이터: except Exception이 잡아 SSE error 이벤트로 전송
         sys.exit()을 호출하면 uvicorn 프로세스 자체가 죽으므로 사용하지 않는다.
         """
-        if not self.openai_api_key:
+        if not self.openai_api_key.get_secret_value():
             raise ConfigError(
                 "OPENAI_API_KEY가 설정되지 않았습니다.\n"
                 "  1. archpilot init 을 실행해 .env 파일을 생성하거나\n"

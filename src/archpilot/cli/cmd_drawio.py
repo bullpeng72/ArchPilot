@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import subprocess
+import time
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -133,11 +134,9 @@ def edit(
 
         if system_json.exists():
             # system.json 이 있으면 drawio 파일 자동 생성
-            import json as _json
-            from archpilot.core.parser import SystemParser
+            from archpilot.cli._utils import load_system_model
             from archpilot.renderers.drawio import DrawioRenderer
-            data = _json.loads(system_json.read_text(encoding="utf-8"))
-            model = SystemParser()._dict_to_model(data)
+            model = load_system_model(system_json)
             drawio_file.write_text(DrawioRenderer().render(model), encoding="utf-8")
             console.print(f"[green]✅ system.json으로 다이어그램 생성:[/green] {drawio_file}")
         else:
@@ -210,10 +209,8 @@ def export_cmd(
     dest: Annotated[Optional[Path], typer.Option("--dest", "-d", help="저장 경로 (기본: output/legacy/diagram.drawio)")] = None,
 ) -> None:
     """system.json → .drawio 파일로 내보냅니다."""
-    import json as _json
-
+    from archpilot.cli._utils import load_system_model
     from archpilot.config import settings
-    from archpilot.core.parser import SystemParser
     from archpilot.renderers.drawio import DrawioRenderer
 
     system_json = (system_json or settings.output_dir / "system.json").resolve()
@@ -222,8 +219,7 @@ def export_cmd(
         console.print(f"[red]❌ 파일 없음:[/red] {system_json}")
         raise typer.Exit(1)
 
-    data = _json.loads(system_json.read_text(encoding="utf-8"))
-    model = SystemParser()._dict_to_model(data)
+    model = load_system_model(system_json)
     xml = DrawioRenderer().render(model)
 
     out = dest or system_json.parent / "legacy" / "diagram.drawio"
@@ -233,6 +229,58 @@ def export_cmd(
 
 
 # ── 내부 유틸 ─────────────────────────────────────────────────────────────────
+
+def _json_load(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _reparse(path: Path, out_dir: Path) -> None:
+    """draw.io 파일을 파싱해 system.json과 diagram.mmd를 갱신한다."""
+    from archpilot.renderers.drawio_parser import parse_drawio_xml
+    from archpilot.renderers.mermaid import MermaidRenderer
+
+    try:
+        xml = path.read_text(encoding="utf-8")
+        model = parse_drawio_xml(xml)
+    except Exception as e:
+        console.print(f"[red]파싱 오류:[/red] {e}")
+        return
+
+    # system.json 갱신 (기존 메타데이터 보존)
+    sys_json = out_dir / "system.json"
+    prev_meta: dict = {}
+    prev_comp_meta: dict[str, dict] = {}
+    if sys_json.exists():
+        try:
+            prev = _json_load(sys_json)
+            prev_meta = prev.get("metadata", {})
+            prev_comp_meta = {c["id"]: c.get("metadata", {}) for c in prev.get("components", [])}
+        except Exception:
+            pass
+
+    if prev_meta:
+        model = model.model_copy(update={"metadata": {**prev_meta, **model.metadata}})
+    if prev_comp_meta:
+        updated = []
+        for comp in model.components:
+            old_meta = prev_comp_meta.get(comp.id, {})
+            if old_meta:
+                comp = comp.model_copy(update={"metadata": {**old_meta, **comp.metadata}})
+            updated.append(comp)
+        model = model.model_copy(update={"components": updated})
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    sys_json.write_text(model.model_dump_json(indent=2), encoding="utf-8")
+
+    legacy_dir = out_dir / "legacy"
+    legacy_dir.mkdir(exist_ok=True)
+    (legacy_dir / "diagram.mmd").write_text(MermaidRenderer().render(model), encoding="utf-8")
+
+    console.print(
+        f"[green]✅ 반영 완료:[/green] "
+        f"컴포넌트 {len(model.components)}개 · 연결 {len(model.connections)}개"
+    )
+
 
 def _watch_file(drawio_file: Path, output: Path) -> None:
     """watchdog으로 drawio_file을 감시하고 변경 시 자동 파싱한다."""
@@ -246,9 +294,6 @@ def _watch_file(drawio_file: Path, output: Path) -> None:
         )
         raise typer.Exit(1)
 
-    from archpilot.renderers.drawio_parser import parse_drawio_xml
-    from archpilot.renderers.mermaid import MermaidRenderer
-
     console.print(
         f"[bold]👁  파일 감시 중:[/bold] {drawio_file}\n"
         "[dim]draw.io에서 저장(Ctrl+S)하면 자동으로 ArchPilot에 반영됩니다.[/dim]\n"
@@ -261,51 +306,6 @@ def _watch_file(drawio_file: Path, output: Path) -> None:
                 return
             _reparse(drawio_file, output)
 
-    def _reparse(path: Path, out_dir: Path) -> None:
-        try:
-            xml = path.read_text(encoding="utf-8")
-            model = parse_drawio_xml(xml)
-        except Exception as e:
-            console.print(f"[red]파싱 오류:[/red] {e}")
-            return
-
-        # system.json 갱신 (기존 메타데이터 보존)
-        sys_json = out_dir / "system.json"
-        prev_meta: dict = {}
-        prev_comp_meta: dict[str, dict] = {}
-        if sys_json.exists():
-            try:
-                prev = _json_load(sys_json)
-                prev_meta = prev.get("metadata", {})
-                prev_comp_meta = {c["id"]: c.get("metadata", {}) for c in prev.get("components", [])}
-            except Exception:
-                pass
-
-        if prev_meta:
-            model = model.model_copy(update={"metadata": {**prev_meta, **model.metadata}})
-        if prev_comp_meta:
-            updated = []
-            for comp in model.components:
-                prev = prev_comp_meta.get(comp.id, {})
-                if prev:
-                    comp = comp.model_copy(update={"metadata": {**prev, **comp.metadata}})
-                updated.append(comp)
-            model = model.model_copy(update={"components": updated})
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-        sys_json.write_text(model.model_dump_json(indent=2), encoding="utf-8")
-
-        legacy_dir = out_dir / "legacy"
-        legacy_dir.mkdir(exist_ok=True)
-        (legacy_dir / "diagram.mmd").write_text(MermaidRenderer().render(model), encoding="utf-8")
-
-        console.print(
-            f"[green]✅ 반영 완료:[/green] "
-            f"컴포넌트 {len(model.components)}개 · 연결 {len(model.connections)}개"
-        )
-
-    import time
-
     observer = Observer()
     observer.schedule(_Handler(), str(drawio_file.parent), recursive=False)
     observer.start()
@@ -316,8 +316,3 @@ def _watch_file(drawio_file: Path, output: Path) -> None:
         observer.stop()
         console.print("\n[dim]감시 종료[/dim]")
     observer.join()
-
-
-def _json_load(path: Path) -> dict:
-    import json as _json
-    return _json.loads(path.read_text(encoding="utf-8"))

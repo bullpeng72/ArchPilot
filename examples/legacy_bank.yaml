@@ -1,92 +1,139 @@
-name: "Core Banking Legacy System"
-description: "2010년 구축된 온프레미스 은행 코어 시스템"
-
+name: Core Banking Legacy System
+description: 2010년 구축된 온프레미스 은행 코어 시스템
 components:
-  - id: portal
-    type: server
-    label: "웹 포털 (IIS)"
-    tech: ["IIS 8.5", "ASP.NET 4.5", "Windows Server 2012"]
-    host: on-premise
-
-  - id: core
-    type: server
-    label: "코어 뱅킹 서버"
-    tech: ["COBOL", "Java EE 6", "JBoss 4"]
-    host: on-premise
-    specs:
-      cpu: 32
-      memory: "128GB"
-
-  - id: batch
-    type: server
-    label: "배치 처리 서버"
-    tech: ["Spring Batch", "Java 7", "Quartz"]
-    host: on-premise
-
-  - id: mainframe
-    type: server
-    label: "메인프레임"
-    tech: ["IBM z/OS", "COBOL", "DB2"]
-    host: on-premise
-    specs:
-      model: "IBM z14"
-
-  - id: db_oracle
-    type: database
-    label: "Oracle DB (운영)"
-    tech: ["Oracle 11g", "RAC"]
-    host: on-premise
-    specs:
-      cpu: 16
-      memory: "64GB"
-      storage: "20TB SAN"
-
-  - id: db_oracle_dr
-    type: database
-    label: "Oracle DB (DR)"
-    tech: ["Oracle 11g", "Data Guard"]
-    host: on-premise
-
-  - id: mq
-    type: queue
-    label: "IBM MQ"
-    tech: ["IBM MQ 8.0"]
-    host: on-premise
-
-  - id: ftp_server
-    type: server
-    label: "FTP 서버 (전문 연계)"
-    tech: ["vsftpd", "Linux"]
-    host: on-premise
-
-  - id: hsm
-    type: server
-    label: "HSM (암호화 모듈)"
-    tech: ["Thales HSM", "PKCS#11"]
-    host: on-premise
-
+- id: portal
+  type: server
+  label: 웹 포털 (IIS)
+  tech:
+  - IIS 8.5
+  - ASP.NET 4.5
+  - Windows Server 2012
+  host: on-premise
+  criticality: medium
+  lifecycle_status: deprecated
+  data_classification: internal
+- id: core
+  type: server
+  label: 코어 뱅킹 서버
+  tech:
+  - Java EE 6
+  - JBoss 4
+  - COBOL 연동
+  host: on-premise
+  specs:
+    cpu: 32
+    memory: 128GB
+  criticality: high
+  lifecycle_status: eol
+  data_classification: restricted
+- id: batch
+  type: server
+  label: 배치 처리 서버
+  tech:
+  - Spring Batch
+  - Java 7
+  - Quartz
+  host: on-premise
+  criticality: high
+  lifecycle_status: eol
+  data_classification: confidential
+- id: mainframe
+  type: mainframe
+  label: 메인프레임
+  tech:
+  - IBM z/OS
+  - COBOL
+  - DB2
+  host: on-premise
+  specs:
+    model: IBM z14
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: db_oracle
+  type: database
+  label: Oracle DB (운영)
+  tech:
+  - Oracle 11g
+  - RAC
+  host: on-premise
+  specs:
+    cpu: 16
+    memory: 64GB
+    storage: 20TB SAN
+  criticality: high
+  lifecycle_status: eol
+  data_classification: restricted
+- id: db_oracle_dr
+  type: database
+  label: Oracle DB (DR)
+  tech:
+  - Oracle 11g
+  - Data Guard
+  host: on-premise
+  criticality: high
+  lifecycle_status: eol
+  data_classification: restricted
+- id: mq
+  type: queue
+  label: IBM MQ
+  tech:
+  - IBM MQ 8.0
+  host: on-premise
+  criticality: medium
+  lifecycle_status: deprecated
+  data_classification: confidential
+- id: ftp_server
+  type: server
+  label: FTP 서버 (전문 연계)
+  tech:
+  - vsftpd
+  - Linux
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: hsm
+  type: security
+  label: HSM (암호화 모듈)
+  tech:
+  - Thales HSM
+  - PKCS#11
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
 connections:
-  - from: portal
-    to: core
-    protocol: HTTP/SOAP
-  - from: core
-    to: mainframe
-    protocol: CICS/CTG
-  - from: core
-    to: db_oracle
-    protocol: JDBC
-  - from: db_oracle
-    to: db_oracle_dr
-    protocol: Oracle Data Guard
-  - from: core
-    to: mq
-    protocol: IBM MQ
-  - from: batch
-    to: db_oracle
-    protocol: JDBC
-  - from: batch
-    to: ftp_server
-    protocol: FTP
-  - from: core
-    to: hsm
-    protocol: PKCS11
+- from: portal
+  to: core
+  protocol: HTTP/SOAP
+- from: core
+  to: mainframe
+  protocol: CICS/CTG
+- from: core
+  to: db_oracle
+  protocol: JDBC
+- from: db_oracle
+  to: db_oracle_dr
+  protocol: Oracle Data Guard
+- from: core
+  to: mq
+  protocol: IBM MQ
+- from: batch
+  to: db_oracle
+  protocol: JDBC
+- from: batch
+  to: ftp_server
+  protocol: FTP
+- from: core
+  to: hsm
+  protocol: PKCS11
+domain: banking
+vintage: 2010
+scale:
+  daily_active_users: 200000
+  peak_tps: 800
+  data_volume_gb: 20000
+compliance:
+- PCI-DSS
+- FSRA

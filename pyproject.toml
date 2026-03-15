@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "archpilot"
-version = "0.2.1"
+version = "0.2.3"
 description = "레거시 시스템 구성을 다이어그램으로 코드화하고 AI 기반으로 현대화 아키텍처를 설계·시각화하는 CLI 도구"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,26 +43,29 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "typer[all]>=0.12",
-    "rich>=13.0",
+    "typer[all]>=0.12,<1.0",
+    "rich>=13.0,<15.0",
     "openai>=1.30,<2",
     "python-dotenv>=1.0,<2",
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.0,<3",
-    "pyyaml>=6.0",
-    "diagrams>=0.23",
-    "jinja2>=3.1",
-    "fastapi>=0.111",
-    "uvicorn[standard]>=0.30",
-    "python-multipart>=0.0.9",
-    "tenacity>=8.0",
-    "watchdog>=4.0",
+    "pyyaml>=6.0,<7.0",
+    "diagrams>=0.23,<1.0",
+    "jinja2>=3.1,<4.0",
+    "fastapi>=0.111,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    "python-multipart>=0.0.9,<1.0",
+    "tenacity>=8.0,<10.0",
+    "watchdog>=4.0,<6.0",
+    "defusedxml>=0.7,<1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.12",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
     "ruff>=0.4",
     "mypy>=1.10",
     "pre-commit>=3.7",

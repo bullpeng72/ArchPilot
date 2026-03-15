@@ -1,0 +1,546 @@
+name: Large-Scale Fintech Payment Platform
+description: 2016년 구축된 대규모 핀테크 결제 플랫폼. 일 거래량 3억 건, 피크 TPS 80,000. 온프레미스 코어 결제망 + AWS
+  다중 리전(ap-northeast-2 Primary / ap-southeast-1 DR) + 글로벌 CDN. PCI-DSS Level 1 준수.
+components:
+- id: client_mobile
+  type: client
+  label: 모바일 앱 (iOS/Android)
+  tech:
+  - Swift 5
+  - Kotlin
+  - Flutter
+  host: on-premise
+  metadata:
+    users: 4,200만
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: client_web
+  type: client
+  label: 웹 결제 페이지
+  tech:
+  - React 18
+  - TypeScript
+  - webpack
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: client_sdk
+  type: client
+  label: 가맹점 PG SDK
+  tech:
+  - JavaScript SDK
+  - iOS SDK
+  - Android SDK
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: cdn_global
+  type: cdn
+  label: 글로벌 CDN (Cloudflare)
+  tech:
+  - Cloudflare
+  - Anycast
+  - WAF
+  - DDoS Protection
+  host: hybrid
+  metadata:
+    pop_count: 300
+  criticality: high
+  lifecycle_status: active
+  data_classification: public
+- id: nlb_primary
+  type: loadbalancer
+  label: NLB (Primary Region)
+  tech:
+  - AWS NLB
+  - TCP/TLS Termination
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: api_gateway
+  type: gateway
+  label: AWS API Gateway (결제 진입점)
+  tech:
+  - AWS API Gateway v2
+  - JWT
+  - WAF
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: auth_service
+  type: service
+  label: 인증 / 토큰 서비스
+  tech:
+  - Go 1.21
+  - JWT RS256
+  - Redis Cluster
+  host: aws
+  specs:
+    instances: 12
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: payment_service
+  type: service
+  label: 결제 오케스트레이터
+  tech:
+  - Java 17
+  - Spring Boot 3
+  - gRPC
+  host: aws
+  specs:
+    instances: 30
+    memory: 8GB
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: fraud_service
+  type: service
+  label: 이상거래 탐지 (FDS)
+  tech:
+  - Python 3.11
+  - XGBoost
+  - FastAPI
+  - ONNX Runtime
+  host: aws
+  specs:
+    instances: 20
+    gpu: A10G × 4
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: settlement_service
+  type: service
+  label: 정산 / 청구 서비스
+  tech:
+  - Java 17
+  - Spring Batch
+  - Quartz
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: notification_service
+  type: service
+  label: 알림 서비스 (SMS/Push/Email)
+  tech:
+  - Node.js 20
+  - AWS SES
+  - FCM
+  - AWS SNS
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: card_vault
+  type: security
+  label: 카드번호 금고 (PCI Vault)
+  tech:
+  - HashiCorp Vault Enterprise
+  - AES-256-GCM
+  - HSM
+  host: aws
+  compliance:
+  - PCI-DSS Level 1
+  - PA-DSS
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: kafka_cluster
+  type: queue
+  label: Kafka 클러스터 (MSK)
+  tech:
+  - Amazon MSK
+  - Kafka 3.5
+  - Schema Registry
+  host: aws
+  specs:
+    brokers: 9
+    partitions: 2400
+    throughput: 5GB/s
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: redis_cluster
+  type: cache
+  label: Redis 클러스터 (ElastiCache)
+  tech:
+  - Amazon ElastiCache
+  - Redis 7.2
+  - Cluster Mode
+  host: aws
+  specs:
+    nodes: 3 Primary + 3 Replica
+    memory: 768GB total
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: aurora_primary
+  type: database
+  label: Aurora MySQL 클러스터 (결제 원장)
+  tech:
+  - Amazon Aurora MySQL 8.0
+  - Multi-AZ
+  - Proxy
+  host: aws
+  specs:
+    writer: db.r6g.16xlarge
+    readers: 5
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: aurora_analytics
+  type: database
+  label: Aurora MySQL (분석 읽기 전용)
+  tech:
+  - Amazon Aurora MySQL
+  - Read Replica
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: dynamodb
+  type: database
+  label: DynamoDB (세션·멱등키)
+  tech:
+  - Amazon DynamoDB
+  - DAX
+  - Global Tables
+  host: aws
+  specs:
+    write_capacity: 500,000 WCU
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: s3_ledger
+  type: storage
+  label: S3 (거래 원장 아카이브)
+  tech:
+  - Amazon S3
+  - S3 Glacier
+  - Object Lock WORM
+  host: aws
+  metadata:
+    retention: 10년 (금융법)
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: kinesis_stream
+  type: queue
+  label: Kinesis Data Streams (실시간 집계)
+  tech:
+  - Amazon Kinesis
+  - KCL 3.0
+  host: aws
+  specs:
+    shards: 500
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: flink_app
+  type: service
+  label: Apache Flink (실시간 집계)
+  tech:
+  - Amazon Kinesis Analytics
+  - Apache Flink 1.18
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: redshift
+  type: database
+  label: Redshift (경영·규제 보고)
+  tech:
+  - Amazon Redshift RA3
+  - Redshift Spectrum
+  host: aws
+  specs:
+    nodes: 8 × ra3.16xlarge
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: sagemaker
+  type: service
+  label: SageMaker (FDS 모델 재학습)
+  tech:
+  - Amazon SageMaker
+  - MLflow
+  - Feature Store
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: cloudwatch
+  type: monitoring
+  label: CloudWatch / X-Ray / Datadog
+  tech:
+  - Amazon CloudWatch
+  - AWS X-Ray
+  - Datadog APM
+  host: aws
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: waf_shield
+  type: security
+  label: AWS WAF + Shield Advanced
+  tech:
+  - AWS WAF
+  - AWS Shield Advanced
+  - Firewall Manager
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: aurora_dr
+  type: database
+  label: Aurora MySQL DR (싱가포르)
+  tech:
+  - Aurora Global Database
+  - < 1s RPO
+  host: aws
+  metadata:
+    region: ap-southeast-1
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: dr_gateway
+  type: gateway
+  label: DR Region API Gateway
+  tech:
+  - AWS API Gateway v2
+  - Route 53 Health Check
+  host: aws
+  metadata:
+    region: ap-southeast-1
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: vpn_dx
+  type: gateway
+  label: AWS Direct Connect (10Gbps × 2)
+  tech:
+  - AWS Direct Connect
+  - BGP
+  - Link Aggregation
+  host: hybrid
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: core_payment_gw
+  type: gateway
+  label: 코어 결제 게이트웨이 (카드사 연동)
+  tech:
+  - ISO 8583
+  - TCP/IP
+  - HSM-signed MAC
+  host: on-premise
+  metadata:
+    peers:
+    - BC카드
+    - 신한카드
+    - 국민카드
+    - 삼성카드
+    - 현대카드
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: van_switch
+  type: server
+  label: VAN 스위치 (금융망 연결)
+  tech:
+  - KIS VAN
+  - KFTC 금융공동망
+  - ISO 8583
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: hsm_onprem
+  type: security
+  label: 온프레미스 HSM (PIN 암호화)
+  tech:
+  - Thales payShield 10K
+  - 3DES / AES
+  host: on-premise
+  compliance: PCI-PTS
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: core_db
+  type: database
+  label: 코어 결제 DB (Tibero RAC)
+  tech:
+  - Tibero 6 RAC
+  - Active-Active
+  - SAN
+  host: on-premise
+  specs:
+    cpu: 64
+    memory: 512GB
+    storage: 50TB SAN NVMe
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: settlement_batch
+  type: server
+  label: 정산 배치 서버
+  tech:
+  - Java 11
+  - Spring Batch
+  - IBM MQ
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: ibm_mq
+  type: queue
+  label: IBM MQ (카드사 전문 큐)
+  tech:
+  - IBM MQ 9.3
+  - JMS 2.0
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: moni_onprem
+  type: monitoring
+  label: 온프레미스 모니터링 (Zabbix)
+  tech:
+  - Zabbix 6.4
+  - Grafana
+  - PagerDuty
+  host: on-premise
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+connections:
+- from: client_mobile
+  to: cdn_global
+  protocol: HTTPS
+- from: client_web
+  to: cdn_global
+  protocol: HTTPS
+- from: client_sdk
+  to: cdn_global
+  protocol: HTTPS
+- from: cdn_global
+  to: waf_shield
+  protocol: HTTPS
+- from: waf_shield
+  to: nlb_primary
+  protocol: HTTPS/TLS
+- from: nlb_primary
+  to: api_gateway
+  protocol: HTTPS
+- from: api_gateway
+  to: auth_service
+  protocol: gRPC / JWT Validate
+- from: api_gateway
+  to: payment_service
+  protocol: gRPC
+- from: auth_service
+  to: redis_cluster
+  protocol: RESP3
+- from: auth_service
+  to: dynamodb
+  protocol: AWS SDK
+- from: payment_service
+  to: fraud_service
+  protocol: gRPC (동기, < 50ms SLA)
+- from: payment_service
+  to: card_vault
+  protocol: HTTPS / Vault API
+- from: payment_service
+  to: aurora_primary
+  protocol: JDBC (Aurora Proxy)
+- from: payment_service
+  to: dynamodb
+  protocol: AWS SDK (멱등키 체크)
+- from: payment_service
+  to: kafka_cluster
+  protocol: Kafka Producer
+- from: payment_service
+  to: redis_cluster
+  protocol: RESP3 (분산 락)
+- from: payment_service
+  to: vpn_dx
+  protocol: Internal
+- from: vpn_dx
+  to: core_payment_gw
+  protocol: Direct Connect / ISO 8583
+- from: core_payment_gw
+  to: van_switch
+  protocol: ISO 8583
+- from: core_payment_gw
+  to: hsm_onprem
+  protocol: PKCS#11
+- from: core_payment_gw
+  to: core_db
+  protocol: JDBC
+- from: core_payment_gw
+  to: ibm_mq
+  protocol: IBM MQ JMS
+- from: ibm_mq
+  to: settlement_batch
+  protocol: JMS
+- from: settlement_batch
+  to: core_db
+  protocol: JDBC
+- from: kafka_cluster
+  to: settlement_service
+  protocol: Kafka Consumer
+- from: kafka_cluster
+  to: notification_service
+  protocol: Kafka Consumer
+- from: kafka_cluster
+  to: kinesis_stream
+  protocol: Kafka → Kinesis Bridge
+- from: kinesis_stream
+  to: flink_app
+  protocol: KCL
+- from: flink_app
+  to: redshift
+  protocol: JDBC
+- from: aurora_primary
+  to: s3_ledger
+  protocol: Aurora Export (Parquet)
+- from: fraud_service
+  to: redis_cluster
+  protocol: RESP3 (Feature Cache)
+- from: kinesis_stream
+  to: sagemaker
+  protocol: Kinesis → Feature Store
+- from: sagemaker
+  to: fraud_service
+  protocol: ECR 이미지 배포 (Blue/Green)
+- from: aurora_primary
+  to: aurora_analytics
+  protocol: Aurora Binlog Replication
+- from: aurora_primary
+  to: aurora_dr
+  protocol: Aurora Global Database (< 1s)
+- from: api_gateway
+  to: dr_gateway
+  protocol: Route 53 Failover
+- from: cloudwatch
+  to: payment_service
+  protocol: CloudWatch Agent / X-Ray
+- from: moni_onprem
+  to: core_payment_gw
+  protocol: SNMP / Zabbix Agent
+domain: finance
+vintage: 2016
+scale:
+  daily_active_users: 42000000
+  peak_tps: 80000
+  data_volume_gb: 50000000
+compliance:
+- PCI-DSS
+- 전자금융거래법
+- 개인정보보호법

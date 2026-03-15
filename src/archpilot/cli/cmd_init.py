@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sys
+import getpass
 from pathlib import Path
 
 import typer
@@ -15,56 +15,8 @@ console = Console()
 
 
 def _prompt_api_key(prompt: str) -> str:
-    """API 키 입력 시 * 마스킹 표시 (크로스 플랫폼)."""
-    console.print(f"{prompt}: ", end="")
-
-    if sys.platform == "win32":
-        import msvcrt
-        chars: list[str] = []
-        while True:
-            ch = msvcrt.getwch()
-            if ch in ("\r", "\n"):
-                break
-            if ch == "\x03":
-                raise KeyboardInterrupt
-            if ch == "\x08":  # backspace
-                if chars:
-                    chars.pop()
-                    sys.stdout.write("\b \b")
-                    sys.stdout.flush()
-            else:
-                chars.append(ch)
-                sys.stdout.write("*")
-                sys.stdout.flush()
-        sys.stdout.write("\n")
-        return "".join(chars)
-    else:
-        import termios
-        import tty
-        fd = sys.stdin.fileno()
-        old = termios.tcgetattr(fd)
-        chars = []
-        try:
-            tty.setraw(fd)
-            while True:
-                ch = sys.stdin.read(1)
-                if ch in ("\r", "\n"):
-                    break
-                if ch == "\x03":  # Ctrl+C
-                    raise KeyboardInterrupt
-                if ch in ("\x7f", "\x08"):  # backspace
-                    if chars:
-                        chars.pop()
-                        sys.stdout.write("\b \b")
-                        sys.stdout.flush()
-                else:
-                    chars.append(ch)
-                    sys.stdout.write("*")
-                    sys.stdout.flush()
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
-        sys.stdout.write("\n")
-        return "".join(chars)
+    """API 키 입력 (입력 내용 비표시, 크로스 플랫폼)."""
+    return getpass.getpass(f"{prompt}: ")
 
 
 def init_cmd() -> None:

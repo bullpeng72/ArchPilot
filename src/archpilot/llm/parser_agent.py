@@ -37,7 +37,7 @@ class LLMParser:
 
             try:
                 return SystemParser()._dict_to_model(data)
-            except (ParseError, Exception) as e:
+            except Exception as e:
                 last_error = str(e)
 
         raise ParseError(

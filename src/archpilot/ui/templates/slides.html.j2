@@ -45,71 +45,138 @@
       inset: 0;
       background: rgba(0,0,0,0.88);
       z-index: 9999;
-      cursor: zoom-out;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 10px;
       backdrop-filter: blur(4px);
     }
     #diagram-modal.active { display: flex; }
+
+    /* 모달 상단 툴바 (닫기 + 줌 컨트롤) */
+    #diagram-modal-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: min(92vw, 1100px);
+      justify-content: flex-end;
+    }
+    .modal-zoom-btn {
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      border-radius: 6px;
+      width: 32px; height: 32px;
+      font-size: 1.1rem; font-weight: bold;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .modal-zoom-btn:hover { background: rgba(255,255,255,0.35); }
+    #zoom-label {
+      color: #fff;
+      font-size: 0.85rem;
+      min-width: 46px;
+      text-align: center;
+      font-family: monospace;
+    }
+    #diagram-modal-close {
+      color: #fff; font-size: 1.3rem; cursor: pointer;
+      background: rgba(255,255,255,0.15); border: none;
+      border-radius: 50%; width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold;
+    }
+    #diagram-modal-close:hover { background: rgba(255,255,255,0.35); }
+
+    /* 다이어그램 뷰포트 (overflow: hidden) */
     #diagram-modal-inner {
       background: white;
       border-radius: 10px;
-      padding: 1rem 1.4rem;
       width: min(92vw, 1100px);
-      max-height: 90vh;
-      overflow: auto;
+      height: min(80vh, 750px);
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
       box-shadow: 0 8px 40px rgba(0,0,0,0.6);
     }
-    /* SVG inline 스타일은 JS에서 리셋하므로 CSS로만 크기 지정 */
-    #diagram-modal-inner svg {
-      width: 100% !important;
-      height: auto !important;
-      max-height: 80vh;
+    #diagram-modal-inner.dragging { cursor: grabbing; }
+
+    /* SVG 변환 캔버스 */
+    #diagram-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #diagram-canvas svg {
       display: block;
     }
-    #diagram-modal-close {
-      position: absolute;
-      top: 14px; right: 18px;
-      color: #fff; font-size: 1.4rem; cursor: pointer;
-      background: rgba(255,255,255,0.15); border: none;
-      border-radius: 50%; width: 34px; height: 34px;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; z-index: 10000;
+
+    /* 줌 힌트 */
+    #diagram-modal-hint {
+      color: rgba(255,255,255,0.45);
+      font-size: 0.7rem;
+      text-align: center;
     }
-    #diagram-modal-close:hover { background: rgba(255,255,255,0.3); }
 
     /* ── diff 테이블 공통 ── */
     .diff-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.72em;
-      table-layout: fixed;   /* 컬럼 폭을 CSS로 제어 */
+      table-layout: fixed;
       word-break: break-word;
     }
     .diff-table th, .diff-table td {
       padding: 6px 10px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      word-wrap: break-word;
     }
     .diff-table th {
-      background: rgba(255,255,255,0.15);
+      background: rgba(20,20,40,0.97);
       border-bottom: 2px solid rgba(255,255,255,0.25);
-      white-space: normal;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
     .diff-table td { border-bottom: 1px solid rgba(255,255,255,0.08); }
     .diff-table tr:hover td { background: rgba(255,255,255,0.05); }
 
     /* 분석 요약 테이블: 2컬럼 (항목 / 내용) */
     .summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 26%; }
-    .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 74%; white-space: normal; }
+    .summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 74%; }
 
     /* Before/After diff 테이블: 4컬럼 */
-    .diff4-table th:nth-child(1), .diff4-table td:nth-child(1) { width: 36%; white-space: normal; }
-    .diff4-table th:nth-child(2), .diff4-table td:nth-child(2) { width: 13%; text-align: center; }
-    .diff4-table th:nth-child(3), .diff4-table td:nth-child(3) { width: 25%; white-space: normal; }
-    .diff4-table th:nth-child(4), .diff4-table td:nth-child(4) { width: 26%; white-space: normal; }
+    .diff4-table th:nth-child(1), .diff4-table td:nth-child(1) { width: 34%; }
+    .diff4-table th:nth-child(2), .diff4-table td:nth-child(2) { width: 12%; text-align: center; }
+    .diff4-table th:nth-child(3), .diff4-table td:nth-child(3) { width: 27%; }
+    .diff4-table th:nth-child(4), .diff4-table td:nth-child(4) { width: 27%; }
+
+    /* ── Before/After 스크롤 래퍼 ── */
+    .diff-scroll-wrap {
+      max-height: 62vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+    .diff-scroll-wrap::-webkit-scrollbar { width: 6px; }
+    .diff-scroll-wrap::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+    }
+    /* 스크롤 가능 표시 */
+    .diff-scroll-hint {
+      text-align: right;
+      font-size: 0.55em;
+      color: rgba(255,255,255,0.35);
+      margin-top: 0.3em;
+    }
 
     .tag-new  { background: #27ae60; color: white; border-radius: 3px; padding: 1px 7px; font-size: 0.85em; }
     .tag-mod  { background: #e67e22; color: white; border-radius: 3px; padding: 1px 7px; font-size: 0.85em; }
@@ -279,8 +346,17 @@
 
 <!-- 다이어그램 확대 모달 -->
 <div id="diagram-modal">
-  <button id="diagram-modal-close" title="닫기 (ESC)">✕</button>
-  <div id="diagram-modal-inner"></div>
+  <div id="diagram-modal-toolbar">
+    <button class="modal-zoom-btn" id="btn-zoom-out" title="축소 (−)">−</button>
+    <span id="zoom-label">100%</span>
+    <button class="modal-zoom-btn" id="btn-zoom-in" title="확대 (+)">+</button>
+    <button class="modal-zoom-btn" id="btn-zoom-reset" title="원래 크기로 (R)" style="font-size:0.85rem;">↺</button>
+    <button id="diagram-modal-close" title="닫기 (ESC)">✕</button>
+  </div>
+  <div id="diagram-modal-inner">
+    <div id="diagram-canvas"></div>
+  </div>
+  <div id="diagram-modal-hint">휠: 줌 &nbsp;|&nbsp; 드래그: 이동 &nbsp;|&nbsp; ↺: 원래 크기 &nbsp;|&nbsp; ESC: 닫기</div>
 </div>
 
 <div class="reveal">
@@ -432,49 +508,52 @@
 {% if diff %}
 <section>
   <h2>📊 Before / After 비교</h2>
-  <table class="diff-table diff4-table">
-    <thead>
-      <tr>
-        <th>컴포넌트</th>
-        <th>변경</th>
-        <th>Legacy</th>
-        <th>Modern</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in diff.added %}
-      <tr>
-        <td>{{ c.label }}</td>
-        <td><span class="tag-new">NEW</span></td>
-        <td style="color:rgba(255,255,255,0.35);">-</td>
-        <td>{{ c.tech|join(', ') or c.type.value }}</td>
-      </tr>
-      {% endfor %}
-      {% for ch in diff.modified %}
-      <tr>
-        <td>{{ ch.after.label }}</td>
-        <td><span class="tag-mod">변경</span></td>
-        <td style="text-decoration:line-through; color:rgba(255,255,255,0.5);">{{ ch.before.tech|join(', ') or ch.before.host.value }}</td>
-        <td>{{ ch.after.tech|join(', ') or ch.after.host.value }}</td>
-      </tr>
-      {% endfor %}
-      {% for c in diff.unchanged %}
-      <tr>
-        <td>{{ c.label }}</td>
-        <td><span class="tag-same">유지</span></td>
-        <td colspan="2" style="color:rgba(255,255,255,0.6);">{{ c.tech|join(', ') }}</td>
-      </tr>
-      {% endfor %}
-      {% for c in diff.removed %}
-      <tr>
-        <td style="text-decoration:line-through; color:rgba(255,255,255,0.5);">{{ c.label }}</td>
-        <td><span class="tag-del">제거</span></td>
-        <td>{{ c.tech|join(', ') }}</td>
-        <td style="color:rgba(255,255,255,0.35);">-</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="diff-scroll-wrap">
+    <table class="diff-table diff4-table">
+      <thead>
+        <tr>
+          <th>컴포넌트</th>
+          <th>변경</th>
+          <th>Legacy</th>
+          <th>Modern</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in diff.added %}
+        <tr>
+          <td>{{ c.label }}</td>
+          <td><span class="tag-new">NEW</span></td>
+          <td style="color:rgba(255,255,255,0.35);">—</td>
+          <td>{{ c.tech|join(', ') or c.type.value }}</td>
+        </tr>
+        {% endfor %}
+        {% for ch in diff.modified %}
+        <tr>
+          <td>{{ ch.after.label }}</td>
+          <td><span class="tag-mod">변경</span></td>
+          <td style="text-decoration:line-through; color:rgba(255,255,255,0.5);">{{ ch.before.tech|join(', ') or ch.before.host.value }}</td>
+          <td>{{ ch.after.tech|join(', ') or ch.after.host.value }}</td>
+        </tr>
+        {% endfor %}
+        {% for c in diff.unchanged %}
+        <tr>
+          <td>{{ c.label }}</td>
+          <td><span class="tag-same">유지</span></td>
+          <td colspan="2" style="color:rgba(255,255,255,0.6);">{{ c.tech|join(', ') }}</td>
+        </tr>
+        {% endfor %}
+        {% for c in diff.removed %}
+        <tr>
+          <td style="text-decoration:line-through; color:rgba(255,255,255,0.5);">{{ c.label }}</td>
+          <td><span class="tag-del">제거</span></td>
+          <td>{{ c.tech|join(', ') }}</td>
+          <td style="color:rgba(255,255,255,0.35);">—</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="diff-scroll-hint">↕ 스크롤하여 전체 내용 확인</p>
 </section>
 {% endif %}
 
@@ -572,49 +651,196 @@
   Reveal.on('ready',        async (e) => renderCurrentSlide(e.currentSlide));
   Reveal.on('slidechanged', async (e) => renderCurrentSlide(e.currentSlide));
 
-  // ── 다이어그램 클릭 확대 모달 ────────────────────────────────────────
+  // ── 다이어그램 확대 모달 (줌 + 패닝) ────────────────────────────────
   const modal      = document.getElementById('diagram-modal');
   const modalInner = document.getElementById('diagram-modal-inner');
+  const canvas     = document.getElementById('diagram-canvas');
   const modalClose = document.getElementById('diagram-modal-close');
+  const zoomLabel  = document.getElementById('zoom-label');
+  const btnZoomIn  = document.getElementById('btn-zoom-in');
+  const btnZoomOut = document.getElementById('btn-zoom-out');
+  const btnReset   = document.getElementById('btn-zoom-reset');
+
+  // 줌/패닝 상태
+  let _scale = 1, _panX = 0, _panY = 0;
+  let _isDragging = false, _dragStartX = 0, _dragStartY = 0, _panStartX = 0, _panStartY = 0;
+  const SCALE_MIN = 0.1, SCALE_MAX = 12;
+
+  function _applyTransform() {
+    canvas.style.transform = `translate(${_panX}px,${_panY}px) scale(${_scale})`;
+    zoomLabel.textContent  = Math.round(_scale * 100) + '%';
+  }
+
+  // 뷰포트 중심점 (cx,cy) 기준으로 delta 배율 줌
+  function _zoomAt(cx, cy, delta) {
+    const next = Math.max(SCALE_MIN, Math.min(SCALE_MAX, _scale * delta));
+    const ratio = next / _scale;
+    _panX  = cx - ratio * (cx - _panX);
+    _panY  = cy - ratio * (cy - _panY);
+    _scale = next;
+    _applyTransform();
+  }
+
+  // SVG를 뷰포트에 꽉 맞게 초기 fit
+  // getBBox()로 실제 콘텐츠 영역만 사용 (Mermaid SVG의 여백 무시)
+  function _fitToView() {
+    const svg = canvas.querySelector('svg');
+    if (!svg) return;
+
+    // SVG 속성 크기 (CSS px)
+    const attrW = parseFloat(svg.getAttribute('width'))  || 0;
+    const attrH = parseFloat(svg.getAttribute('height')) || 0;
+    const vb    = svg.viewBox && svg.viewBox.baseVal;
+    const vbW   = (vb && vb.width  > 0) ? vb.width  : attrW || 800;
+    const vbH   = (vb && vb.height > 0) ? vb.height : attrH || 600;
+    // SVG 실제 렌더 크기 (CSS px) — 속성값이 viewBox 단위와 같을 때 동일
+    const cssW  = attrW || vbW;
+    const cssH  = attrH || vbH;
+    // SVG 유저 단위 → CSS px 비율
+    const ux = cssW / vbW;
+    const uy = cssH / vbH;
+
+    // 실제 콘텐츠 Bounding-Box (SVG 유저 단위)
+    let cX = 0, cY = 0, cW = cssW, cH = cssH;
+    try {
+      const bbox = svg.getBBox();
+      if (bbox.width > 4 && bbox.height > 4) {
+        cX = bbox.x * ux;
+        cY = bbox.y * uy;
+        cW = bbox.width  * ux;
+        cH = bbox.height * uy;
+      }
+    } catch (_) { /* SVG 미렌더링 시 폴백 */ }
+
+    const vpW = modalInner.clientWidth;
+    const vpH = modalInner.clientHeight;
+    const pad = 24;
+    _scale = Math.min((vpW - pad) / cW, (vpH - pad) / cH, 3);
+    // 콘텐츠 중심을 뷰포트 중심에 정렬
+    _panX = vpW / 2 - (cX + cW / 2) * _scale;
+    _panY = vpH / 2 - (cY + cH / 2) * _scale;
+    _applyTransform();
+  }
 
   function openDiagramModal(wrap) {
     const svg = wrap.querySelector('svg');
     if (!svg) return;
-    // SVG를 deep clone해서 모달에 삽입.
-    // outerHTML 방식은 슬라이드에서 적용된 인라인 스타일(max-height 등)이 딸려와
-    // 모달에서도 작게 표시되는 문제가 있으므로, cloneNode 후 cssText를 초기화한다.
     const clone = svg.cloneNode(true);
-    clone.style.cssText = '';  // 슬라이드용 인라인 스타일 전체 초기화
-    // CSS (#diagram-modal-inner svg { width: 100%; height: auto; }) 가 크기를 제어
-    modalInner.innerHTML = '';
-    modalInner.appendChild(clone);
+    clone.style.cssText = '';   // 슬라이드용 인라인 스타일 초기화
+    canvas.innerHTML = '';
+    canvas.appendChild(clone);
     modal.classList.add('active');
+    // 모달 표시 + 레이아웃 확정 후 fit (두 번 rAF + 짧은 타임아웃 이중 보장)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        _fitToView();
+        // 레이아웃이 아직 미확정인 경우 한 번 더
+        if (_scale <= 0.01) setTimeout(_fitToView, 60);
+      });
+    });
   }
 
   function closeDiagramModal() {
     modal.classList.remove('active');
-    modalInner.innerHTML = '';
+    modalInner.classList.remove('dragging');
+    canvas.innerHTML = '';
+    _scale = 1; _panX = 0; _panY = 0;
+    _applyTransform();
   }
 
+  // 마우스 휠 줌 (뷰포트 상대 좌표 기준)
+  modalInner.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect  = modalInner.getBoundingClientRect();
+    const cx    = e.clientX - rect.left;
+    const cy    = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    _zoomAt(cx, cy, delta);
+  }, { passive: false });
+
+  // 드래그 패닝
+  modalInner.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    _isDragging = true;
+    _dragStartX = e.clientX; _dragStartY = e.clientY;
+    _panStartX  = _panX;     _panStartY  = _panY;
+    modalInner.classList.add('dragging');
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!_isDragging) return;
+    _panX = _panStartX + (e.clientX - _dragStartX);
+    _panY = _panStartY + (e.clientY - _dragStartY);
+    _applyTransform();
+  });
+  window.addEventListener('mouseup', () => {
+    if (_isDragging) {
+      _isDragging = false;
+      modalInner.classList.remove('dragging');
+    }
+  });
+
+  // 터치 줌/패닝 (pinch-to-zoom)
+  let _touch1 = null, _touch2 = null, _touchScale0 = 1, _touchPanX0 = 0, _touchPanY0 = 0;
+  modalInner.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      _touch1 = e.touches[0]; _touch2 = null;
+      _panStartX = _panX; _panStartY = _panY;
+    } else if (e.touches.length === 2) {
+      _touch1 = e.touches[0]; _touch2 = e.touches[1];
+      _touchScale0 = _scale;
+      _touchPanX0 = _panX; _touchPanY0 = _panY;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  modalInner.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && _touch1 && !_touch2) {
+      _panX = _panStartX + (e.touches[0].clientX - _touch1.clientX);
+      _panY = _panStartY + (e.touches[0].clientY - _touch1.clientY);
+      _applyTransform();
+    } else if (e.touches.length === 2 && _touch1 && _touch2) {
+      const d0 = Math.hypot(_touch2.clientX - _touch1.clientX, _touch2.clientY - _touch1.clientY);
+      const d1 = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - modalInner.getBoundingClientRect().left;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - modalInner.getBoundingClientRect().top;
+      _scale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, _touchScale0 * (d1 / d0)));
+      _panX  = cx - (_touchPanX0 - cx) * (_scale / _touchScale0) - cx + cx;
+      _panX  = cx - (cx - _touchPanX0) * (_scale / _touchScale0);
+      _panY  = cy - (cy - _touchPanY0) * (_scale / _touchScale0);
+      _applyTransform();
+    }
+  }, { passive: false });
+
+  // 줌 버튼
+  function _centerZoom(delta) {
+    _zoomAt(modalInner.clientWidth / 2, modalInner.clientHeight / 2, delta);
+  }
+  btnZoomIn .addEventListener('click', (e) => { e.stopPropagation(); _centerZoom(1.25); });
+  btnZoomOut.addEventListener('click', (e) => { e.stopPropagation(); _centerZoom(1 / 1.25); });
+  btnReset  .addEventListener('click', (e) => { e.stopPropagation(); _fitToView(); });
+
+  // 슬라이드 다이어그램 클릭 → 모달 열기
   document.addEventListener('click', (e) => {
     if (modal.classList.contains('active')) return;
     const wrap = e.target.closest('[data-diagram]');
     if (wrap) openDiagramModal(wrap);
   });
 
-  modalClose.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeDiagramModal();
-  });
+  modalClose.addEventListener('click', (e) => { e.stopPropagation(); closeDiagramModal(); });
 
+  // 모달 배경(오버레이) 클릭 → 닫기
   modal.addEventListener('click', (e) => {
     if (e.target === modal) closeDiagramModal();
   });
 
+  // 키보드 단축키
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal.classList.contains('active')) {
-      closeDiagramModal();
-    }
+    if (!modal.classList.contains('active')) return;
+    if (e.key === 'Escape')   closeDiagramModal();
+    if (e.key === '='  || e.key === '+') _centerZoom(1.25);
+    if (e.key === '-')                   _centerZoom(1 / 1.25);
+    if (e.key === 'r'  || e.key === 'R') _fitToView();
   });
 
   // ── 마이그레이션 플랜 마크다운 렌더링 ───────────────────────────────

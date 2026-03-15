@@ -1,81 +1,111 @@
-name: "E-Commerce Legacy System"
-description: "2015년 구축된 온프레미스 모놀리식 쇼핑몰 시스템"
-
+name: E-Commerce Legacy System
+description: 2015년 구축된 온프레미스 모놀리식 쇼핑몰 시스템
 components:
-  - id: web
-    type: server
-    label: "Apache Web Server"
-    tech: ["Apache 2.4", "PHP 7.2"]
-    host: on-premise
-    specs:
-      cpu: 8
-      memory: "32GB"
-
-  - id: app
-    type: server
-    label: "Monolithic App Server"
-    tech: ["Java 8", "Spring MVC", "Tomcat 8"]
-    host: on-premise
-    specs:
-      cpu: 16
-      memory: "64GB"
-
-  - id: db_master
-    type: database
-    label: "MySQL Master"
-    tech: ["MySQL 5.7"]
-    host: on-premise
-    specs:
-      cpu: 8
-      memory: "32GB"
-      storage: "2TB HDD"
-
-  - id: db_slave
-    type: database
-    label: "MySQL Slave"
-    tech: ["MySQL 5.7"]
-    host: on-premise
-    specs:
-      cpu: 8
-      memory: "32GB"
-      storage: "2TB HDD"
-
-  - id: cache
-    type: cache
-    label: "Memcached"
-    tech: ["Memcached 1.6"]
-    host: on-premise
-
-  - id: storage
-    type: storage
-    label: "NAS Storage"
-    tech: ["NFS", "RAID 5"]
-    host: on-premise
-    specs:
-      capacity: "10TB"
-
-  - id: lb
-    type: loadbalancer
-    label: "L4 Load Balancer"
-    tech: ["HAProxy 1.8"]
-    host: on-premise
-
+- id: web
+  type: server
+  label: Apache Web Server
+  tech:
+  - Apache 2.4
+  - PHP 7.2
+  host: on-premise
+  specs:
+    cpu: 8
+    memory: 32GB
+  criticality: medium
+  lifecycle_status: eol
+  data_classification: internal
+- id: app
+  type: server
+  label: Monolithic App Server
+  tech:
+  - Java 8
+  - Spring MVC
+  - Tomcat 8
+  host: on-premise
+  specs:
+    cpu: 16
+    memory: 64GB
+  criticality: high
+  lifecycle_status: deprecated
+  data_classification: confidential
+- id: db_master
+  type: database
+  label: MySQL Master
+  tech:
+  - MySQL 5.7
+  host: on-premise
+  specs:
+    cpu: 8
+    memory: 32GB
+    storage: 2TB HDD
+  criticality: high
+  lifecycle_status: eol
+  data_classification: confidential
+- id: db_slave
+  type: database
+  label: MySQL Slave
+  tech:
+  - MySQL 5.7
+  host: on-premise
+  specs:
+    cpu: 8
+    memory: 32GB
+    storage: 2TB HDD
+  criticality: medium
+  lifecycle_status: eol
+  data_classification: confidential
+- id: cache
+  type: cache
+  label: Memcached
+  tech:
+  - Memcached 1.6
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: storage
+  type: storage
+  label: NAS Storage
+  tech:
+  - NFS
+  - RAID 5
+  host: on-premise
+  specs:
+    capacity: 10TB
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: lb
+  type: loadbalancer
+  label: L4 Load Balancer
+  tech:
+  - HAProxy 1.8
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
 connections:
-  - from: lb
-    to: web
-    protocol: HTTP
-  - from: web
-    to: app
-    protocol: HTTP
-  - from: app
-    to: db_master
-    protocol: JDBC
-  - from: db_master
-    to: db_slave
-    protocol: MySQL Replication
-  - from: app
-    to: cache
-    protocol: TCP
-  - from: app
-    to: storage
-    protocol: NFS
+- from: lb
+  to: web
+  protocol: HTTP
+- from: web
+  to: app
+  protocol: HTTP
+- from: app
+  to: db_master
+  protocol: JDBC
+- from: db_master
+  to: db_slave
+  protocol: MySQL Replication
+- from: app
+  to: cache
+  protocol: TCP
+- from: app
+  to: storage
+  protocol: NFS
+domain: ecommerce
+vintage: 2015
+scale:
+  daily_active_users: 50000
+  peak_tps: 200
+  data_volume_gb: 2000

@@ -27,12 +27,15 @@ STYLE_MAP: dict[ComponentType, str] = {
     ComponentType.UNKNOWN:      "rounded=1;whiteSpace=wrap;",
 }
 
-CELL_W = 140
-CELL_H = 60
-COLS = 4
-COL_GAP = 180
-ROW_GAP = 100
-MARGIN = 40
+# 컴포넌트 셀 크기 (픽셀)
+CELL_W = 140   # 셀 너비
+CELL_H = 60    # 셀 높이
+
+# 그리드 레이아웃
+COLS = 4       # 한 행에 배치할 최대 컴포넌트 수
+COL_GAP = 180  # 열 간격 (CELL_W 140 + 여백 40)
+ROW_GAP = 100  # 행 간격 (CELL_H 60 + 여백 40)
+MARGIN = 40    # 그룹 박스 내부 패딩
 
 
 class DrawioRenderer(BaseRenderer):

@@ -1,0 +1,571 @@
+name: Large-Scale Video Streaming Platform
+description: 2017년 구축된 대규모 OTT 동영상 스트리밍 플랫폼. MAU 2,800만, 동시 시청 피크 180만 세션, 일 CDN 트래픽
+  8PB. AWS 멀티 리전(ap-northeast-2 Primary, us-east-1 글로벌 컨트롤) + 온프레미스 트랜스코딩 팜 + Cloudflare
+  CDN.
+components:
+- id: smart_tv
+  type: client
+  label: 스마트TV 앱 (Samsung/LG)
+  tech:
+  - Tizen
+  - webOS
+  - HbbTV 2.0
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: mobile_app
+  type: client
+  label: 모바일 앱 (iOS/Android)
+  tech:
+  - Swift 5
+  - Kotlin
+  - ExoPlayer
+  - AVPlayer
+  host: on-premise
+  metadata:
+    drm:
+    - Widevine L1
+    - FairPlay
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: web_player
+  type: client
+  label: 웹 플레이어
+  tech:
+  - React 18
+  - HLS.js
+  - DASH.js
+  - EME API
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: cdn
+  type: cdn
+  label: 글로벌 CDN (Cloudflare Stream)
+  tech:
+  - Cloudflare
+  - HTTP/3 QUIC
+  - HLS
+  - MPEG-DASH
+  - Edge Cache
+  host: hybrid
+  metadata:
+    pop_count: 300
+    cache_hit_rate: 96%
+    peak_egress: 8 PB/day
+  criticality: high
+  lifecycle_status: active
+  data_classification: public
+- id: cdn_origin_shield
+  type: server
+  label: Origin Shield (CDN 오리진 보호)
+  tech:
+  - Nginx 1.25
+  - Varnish Cache 7
+  - AWS EC2 C7g
+  host: aws
+  specs:
+    instances: 20
+    bandwidth: 100Gbps aggregate
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: api_gw
+  type: gateway
+  label: API Gateway (사용자 진입점)
+  tech:
+  - AWS API Gateway v2
+  - WAF
+  - Throttling
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: alb
+  type: loadbalancer
+  label: Application Load Balancer
+  tech:
+  - AWS ALB
+  - gRPC
+  - HTTP/2
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: auth_svc
+  type: service
+  label: 인증 / DRM 라이선스 서비스
+  tech:
+  - Go 1.21
+  - JWT RS256
+  - Widevine Proxy
+  - FairPlay KSM
+  host: aws
+  specs:
+    instances: 16
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: catalog_svc
+  type: service
+  label: 콘텐츠 카탈로그 서비스
+  tech:
+  - Java 17
+  - Spring Boot 3
+  - GraphQL
+  host: aws
+  specs:
+    instances: 10
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: playback_svc
+  type: service
+  label: 재생 세션 / 플레이백 서비스
+  tech:
+  - Go 1.21
+  - gRPC
+  - Protobuf
+  host: aws
+  specs:
+    instances: 24
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: recommendation_svc
+  type: service
+  label: 추천 엔진 서비스
+  tech:
+  - Python 3.11
+  - FastAPI
+  - TensorFlow Serving
+  - ONNX
+  host: aws
+  specs:
+    instances: 8
+    gpu: G5 × 4
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: search_svc
+  type: service
+  label: 검색 서비스 (OpenSearch)
+  tech:
+  - Amazon OpenSearch 2.11
+  - Elasticsearch DSL
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: user_activity_svc
+  type: service
+  label: 시청 이력 / 시청 지점 저장
+  tech:
+  - Node.js 20
+  - Kafka Producer
+  host: aws
+  specs:
+    instances: 12
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: billing_svc
+  type: service
+  label: 구독 / 결제 서비스
+  tech:
+  - Java 17
+  - Spring Boot 3
+  - Stripe SDK
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: notification_svc
+  type: service
+  label: 알림 서비스 (Push/Email)
+  tech:
+  - Node.js 20
+  - AWS SES
+  - FCM
+  - APNs
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: redis_session
+  type: cache
+  label: Redis (세션 / DRM 캐시)
+  tech:
+  - Amazon ElastiCache Redis 7.2
+  - Cluster Mode
+  host: aws
+  specs:
+    nodes: 6 × r7g.2xlarge
+    memory: 384GB
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: redis_catalog
+  type: cache
+  label: Redis (카탈로그 핫 캐시)
+  tech:
+  - Amazon ElastiCache Redis 7.2
+  host: aws
+  specs:
+    nodes: 3 × r7g.4xlarge
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: aurora_users
+  type: database
+  label: Aurora PostgreSQL (사용자/구독)
+  tech:
+  - Amazon Aurora PostgreSQL 15
+  - Multi-AZ
+  - RDS Proxy
+  host: aws
+  specs:
+    writer: db.r7g.8xlarge
+    readers: 4
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: dynamodb_playback
+  type: database
+  label: DynamoDB (재생 상태·시청 지점)
+  tech:
+  - Amazon DynamoDB
+  - Global Tables
+  - DAX
+  host: aws
+  specs:
+    write_capacity: 1,200,000 WCU
+    latency: < 5ms p99
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: s3_segments
+  type: storage
+  label: S3 (HLS/DASH 세그먼트 오리진)
+  tech:
+  - Amazon S3
+  - S3 Intelligent-Tiering
+  - Transfer Acceleration
+  host: aws
+  specs:
+    capacity: 120PB
+    daily_writes: 8PB
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: kafka
+  type: queue
+  label: Kafka 클러스터 (MSK)
+  tech:
+  - Amazon MSK
+  - Kafka 3.6
+  - Schema Registry (Avro)
+  host: aws
+  specs:
+    brokers: 15
+    partitions: 4500
+    throughput: 50GB/s
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: kinesis
+  type: queue
+  label: Kinesis Data Streams (시청 이벤트)
+  tech:
+  - Amazon Kinesis Data Streams
+  - KCL 3.0
+  host: aws
+  specs:
+    shards: 1000
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: flink_realtime
+  type: service
+  label: Flink 실시간 집계 (시청률·동시접속)
+  tech:
+  - Amazon Kinesis Analytics
+  - Apache Flink 1.18
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: spark_batch
+  type: service
+  label: Spark 배치 (추천 모델 피처 생성)
+  tech:
+  - Amazon EMR 6.15
+  - Apache Spark 3.5
+  - Delta Lake
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: sagemaker
+  type: service
+  label: SageMaker (추천 모델 학습/배포)
+  tech:
+  - Amazon SageMaker
+  - TensorFlow 2.15
+  - MLflow
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: redshift
+  type: database
+  label: Redshift (비즈니스 분석·광고 정산)
+  tech:
+  - Amazon Redshift RA3
+  - dbt
+  - Redshift Spectrum
+  host: aws
+  specs:
+    nodes: 12 × ra3.16xlarge
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: timestream
+  type: database
+  label: Timestream (CDN/인프라 메트릭)
+  tech:
+  - Amazon Timestream
+  - Grafana
+  host: aws
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: cloudwatch
+  type: monitoring
+  label: CloudWatch / Datadog / PagerDuty
+  tech:
+  - Amazon CloudWatch
+  - Datadog APM
+  - PagerDuty
+  - AWS X-Ray
+  host: aws
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: waf
+  type: security
+  label: AWS WAF + Shield Advanced
+  tech:
+  - AWS WAF
+  - AWS Shield Advanced
+  - Bot Management
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: ingest_server
+  type: server
+  label: 영상 수신 서버 (방송사 원본)
+  tech:
+  - FFmpeg 6
+  - RTMP
+  - SRT
+  - NDI
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: transcode_farm
+  type: server
+  label: 트랜스코딩 팜 (H.264/HEVC/AV1)
+  tech:
+  - FFmpeg 6
+  - Intel QSV
+  - NVIDIA NVENC
+  - MediaConvert API
+  host: on-premise
+  specs:
+    nodes: 40
+    gpu: A10G × 40
+    throughput: 실시간 × 500배속
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: drm_packager
+  type: server
+  label: DRM 패키저 (Shaka Packager)
+  tech:
+  - Shaka Packager
+  - Widevine
+  - FairPlay
+  - PlayReady
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: nas_raw
+  type: storage
+  label: 원본 영상 NAS
+  tech:
+  - Isilon OneFS
+  - NFS
+  - SMB
+  host: on-premise
+  specs:
+    capacity: 5PB
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: s3_transfer
+  type: gateway
+  label: S3 Transfer Agent (온프레미스 → S3)
+  tech:
+  - AWS DataSync
+  - S3 Transfer Acceleration
+  - 10Gbps
+  host: hybrid
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+connections:
+- from: smart_tv
+  to: cdn
+  protocol: HLS / DASH (HTTPS)
+- from: mobile_app
+  to: cdn
+  protocol: HLS / DASH (HTTPS)
+- from: web_player
+  to: cdn
+  protocol: DASH / HLS (HTTP/3)
+- from: cdn
+  to: cdn_origin_shield
+  protocol: HTTP/2 (Cache Miss)
+- from: cdn_origin_shield
+  to: s3_segments
+  protocol: HTTPS (오리진 풀)
+- from: mobile_app
+  to: waf
+  protocol: HTTPS
+- from: smart_tv
+  to: waf
+  protocol: HTTPS
+- from: web_player
+  to: waf
+  protocol: HTTPS
+- from: waf
+  to: api_gw
+  protocol: HTTPS
+- from: api_gw
+  to: alb
+  protocol: HTTPS
+- from: alb
+  to: auth_svc
+  protocol: gRPC
+- from: alb
+  to: catalog_svc
+  protocol: gRPC / GraphQL
+- from: alb
+  to: playback_svc
+  protocol: gRPC
+- from: alb
+  to: recommendation_svc
+  protocol: REST
+- from: alb
+  to: search_svc
+  protocol: REST
+- from: alb
+  to: user_activity_svc
+  protocol: REST
+- from: alb
+  to: billing_svc
+  protocol: REST
+- from: auth_svc
+  to: redis_session
+  protocol: RESP3
+- from: auth_svc
+  to: dynamodb_playback
+  protocol: AWS SDK (DRM 세션)
+- from: catalog_svc
+  to: redis_catalog
+  protocol: RESP3
+- from: catalog_svc
+  to: search_svc
+  protocol: OpenSearch REST
+- from: playback_svc
+  to: dynamodb_playback
+  protocol: AWS SDK
+- from: playback_svc
+  to: redis_session
+  protocol: RESP3
+- from: billing_svc
+  to: aurora_users
+  protocol: JDBC (RDS Proxy)
+- from: user_activity_svc
+  to: kafka
+  protocol: Kafka Producer (Avro)
+- from: user_activity_svc
+  to: kinesis
+  protocol: Kinesis Producer
+- from: kinesis
+  to: flink_realtime
+  protocol: KCL
+- from: flink_realtime
+  to: timestream
+  protocol: AWS SDK (실시간 메트릭)
+- from: flink_realtime
+  to: dynamodb_playback
+  protocol: AWS SDK (동시접속 카운터)
+- from: kafka
+  to: spark_batch
+  protocol: Kafka Consumer
+- from: spark_batch
+  to: sagemaker
+  protocol: Feature Store API
+- from: sagemaker
+  to: recommendation_svc
+  protocol: ECR 모델 배포 (Blue/Green)
+- from: kafka
+  to: redshift
+  protocol: Kafka → S3 → Redshift COPY
+- from: ingest_server
+  to: nas_raw
+  protocol: NFS
+- from: nas_raw
+  to: transcode_farm
+  protocol: NFS
+- from: transcode_farm
+  to: drm_packager
+  protocol: NFS / REST
+- from: drm_packager
+  to: s3_transfer
+  protocol: NFS / HTTP
+- from: s3_transfer
+  to: s3_segments
+  protocol: S3 API / DataSync
+- from: s3_transfer
+  to: kafka
+  protocol: Kafka Producer (콘텐츠 등록 이벤트)
+- from: kafka
+  to: catalog_svc
+  protocol: Kafka Consumer (메타데이터 갱신)
+- from: kafka
+  to: search_svc
+  protocol: Kafka Consumer (인덱스 갱신)
+- from: cloudwatch
+  to: alb
+  protocol: CloudWatch Agent
+- from: cloudwatch
+  to: flink_realtime
+  protocol: CloudWatch Metrics
+- from: timestream
+  to: cloudwatch
+  protocol: Grafana → Timestream
+domain: ecommerce
+vintage: 2017
+scale:
+  daily_active_users: 28000000
+  peak_tps: 180000
+  data_volume_gb: 120000000

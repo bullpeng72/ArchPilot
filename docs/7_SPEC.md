@@ -1,7 +1,7 @@
 # ArchPilot — 기능 명세 (SPEC)
 
-버전: 0.2.1
-최종 수정: 2026-03-13
+버전: 0.2.3
+최종 수정: 2026-03-15
 
 ---
 
@@ -155,11 +155,23 @@ CloudFront CDN, API Gateway, CI/CD 파이프라인"
 #### 2.3.3 LLM 처리 과정
 
 ```
-1. Legacy SystemModel + 요구사항 → 현대화 SystemModel JSON 생성
-2. 각 컴포넌트 변경 사유 (metadata.reason) 포함
-3. 새로 추가된 컴포넌트 표시 (metadata.is_new: true)
-4. 제거된 컴포넌트 표시 (metadata.removed: true)
-5. 마이그레이션 플랜 (Markdown) 별도 생성
+공통 — A1 체크리스트 주입:
+  레거시 컴포넌트 전체 목록 + component_decisions 액션을 프롬프트에 명시 삽입
+  → LLM이 각 항목을 순서대로 처리해 누락 방지
+
+≤ 20 컴포넌트 — 단일 패스 (A1 + A2):
+  1. MODERNIZE_SYSTEM_PROMPT + 체크리스트 → 현대화 SystemModel JSON 생성
+  2. 누락 컴포넌트 검증 → 부족 시 재설계 프롬프트로 1회 자동 재시도 (A2)
+
+> 20 컴포넌트 — 2단계 분할 (A1 + A3):
+  Phase 1: MODERNIZE_SKELETON_PROMPT → 컴포넌트 스켈레톤 (id/type/label 만)
+  Phase 2: MODERNIZE_SYSTEM_PROMPT  → 스켈레톤 확장 (tech/criticality/connections)
+
+공통 마무리:
+  · 각 컴포넌트 변경 사유 (metadata.reason) 포함
+  · 새로 추가된 컴포넌트 표시 (metadata.is_new: true)
+  · 제거된 컴포넌트 표시 (metadata.removed: true)
+  · 마이그레이션 플랜 (Markdown) 별도 생성
 ```
 
 #### 2.3.4 출력
@@ -341,9 +353,9 @@ class Component(BaseModel):
     label: str
     tech: list[str] = []
     host: HostType = HostType.ON_PREMISE
-    criticality: CriticalityLevel = CriticalityLevel.MEDIUM   # HIGH | MEDIUM | LOW
-    lifecycle_status: LifecycleStatus = LifecycleStatus.ACTIVE # active | deprecated | eol | planned
-    data_classification: DataClassification = DataClassification.INTERNAL # public | internal | confidential | restricted
+    criticality: Criticality = Criticality.MEDIUM              # HIGH | MEDIUM | LOW
+    lifecycle_status: LifecycleStatus = LifecycleStatus.ACTIVE # active | deprecated | eol | sunset | decommissioned
+    data_classification: DataClassification | None = None      # public | internal | confidential | restricted
     owner: str = ""                              # 담당 팀/시스템 오너
     specs: dict[str, Any] = {}
     metadata: dict[str, Any] = {}               # is_new, removed, reason, strategy, replaces 등 LLM 메타데이터
@@ -379,6 +391,11 @@ class AnalysisResult(BaseModel):
     recommended_patterns: list[str] = []
     estimated_effort: EffortLevel = EffortLevel.M   # S | M | L | XL
     summary: str = ""
+    # v0.3.x: 시나리오 기반 현대화
+    recommended_scenario: ModernizationScenario = ModernizationScenario.FULL_REPLACE
+    scenario_rationale: str = ""
+    component_decisions: list[ComponentDecision] = []  # 컴포넌트별 6R 전략
+    legacy_quality: ArchitectureQuality = ...          # 5차원 품질 점수
 ```
 
 ---
@@ -395,7 +412,7 @@ class AnalysisResult(BaseModel):
 
 - **모델**: gpt-4o
 - **응답 형식**: JSON
-- **최대 토큰**: 4096
+- **최대 토큰**: 6000
 - **출력 언어**: 한국어
 - **항목별 최소 개수**: pain_points ≥ max(컴포넌트×1.5, 5), tech_debt ≥ 4, risk_areas ≥ 4, modernization_opportunities ≥ 5, recommended_patterns ≥ 4
 
@@ -403,7 +420,7 @@ class AnalysisResult(BaseModel):
 
 - **모델**: gpt-4o
 - **응답 형식**: JSON (SystemModel 스키마 준수)
-- **최대 토큰**: 4096
+- **최대 토큰**: 12000
 - **입력**: Legacy SystemModel + AnalysisResult + 사용자 요구사항
 
 ### 5.4 마이그레이션 플랜
@@ -492,23 +509,24 @@ class BaseRenderer(ABC):
 ```toml
 [project]
 name = "archpilot"
-version = "0.2.1"
+version = "0.2.3"
 requires-python = ">=3.11"
 dependencies = [
-    "typer[all]>=0.12",
-    "rich>=13.0",
-    "openai>=1.30",
-    "python-dotenv>=1.0",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "pyyaml>=6.0",
-    "diagrams>=0.23",
-    "jinja2>=3.1",
-    "fastapi>=0.111",
-    "uvicorn[standard]>=0.30",
-    "python-multipart>=0.0.9",
-    "tenacity>=8.0",
-    "watchdog>=4.0",
+    "typer[all]>=0.12,<1.0",
+    "rich>=13.0,<15.0",
+    "openai>=1.30,<2",
+    "python-dotenv>=1.0,<2",
+    "pydantic>=2.0,<3",
+    "pydantic-settings>=2.0,<3",
+    "pyyaml>=6.0,<7.0",
+    "diagrams>=0.23,<1.0",
+    "jinja2>=3.1,<4.0",
+    "fastapi>=0.111,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    "python-multipart>=0.0.9,<1.0",
+    "tenacity>=8.0,<10.0",
+    "watchdog>=4.0,<6.0",
+    "defusedxml>=0.7,<1.0",
 ]
 
 [project.scripts]
@@ -524,7 +542,7 @@ tag v*.*.* → ruff + mypy → pytest → build wheel → upload to PyPI (Prod)
 
 ---
 
-## 9. 미지원 범위 (v0.2.1)
+## 9. 미지원 범위 (v0.2.3)
 
 - PlantUML / C4 모델 출력
 - 실시간 협업 편집

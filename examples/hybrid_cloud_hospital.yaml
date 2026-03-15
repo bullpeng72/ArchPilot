@@ -1,0 +1,333 @@
+name: Hybrid Cloud Hospital EHR System
+description: 2019년 구축된 대형 종합병원 전자의무기록(EHR) 시스템. 환자 데이터는 의료법상 온프레미스 보관, 비임상 업무·분석·원격진료는
+  Azure로 분산. PACS(의료영상)는 별도 망으로 격리.
+components:
+- id: ehr_app
+  type: server
+  label: EHR 앱 서버 (EMR Core)
+  tech:
+  - Java 11
+  - Spring Boot 2.5
+  - Wildfly 23
+  host: on-premise
+  specs:
+    cpu: 32
+    memory: 256GB
+  compliance:
+  - HIPAA
+  - 개인정보보호법
+  criticality: high
+  lifecycle_status: deprecated
+  data_classification: restricted
+- id: ehr_db
+  type: database
+  label: 환자 임상 DB (Oracle RAC)
+  tech:
+  - Oracle 19c
+  - RAC
+  - Data Guard
+  host: on-premise
+  specs:
+    cpu: 32
+    memory: 512GB
+    storage: 100TB SAN
+  compliance:
+  - 의료법 제23조
+  - HIPAA
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: ehr_db_dr
+  type: database
+  label: 임상 DB DR 사이트
+  tech:
+  - Oracle 19c
+  - Data Guard Standby
+  host: on-premise
+  metadata:
+    site: DR센터
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: pacs_server
+  type: server
+  label: PACS 영상 서버
+  tech:
+  - Infinitt PACS
+  - DICOM 3.0
+  - HL7 v2.x
+  host: on-premise
+  metadata:
+    zone: 의료영상망(격리)
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: pacs_storage
+  type: storage
+  label: 의료영상 스토리지
+  tech:
+  - NetApp AFF
+  - NFS
+  - WORM
+  host: on-premise
+  specs:
+    capacity: 2PB
+    retention: 30년
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: lis
+  type: server
+  label: LIS (검사정보 시스템)
+  tech:
+  - C# .NET 5
+  - HL7 FHIR R4
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: ris
+  type: server
+  label: RIS (방사선 정보 시스템)
+  tech:
+  - HL7 v2.x
+  - DICOM Worklist
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: hl7_broker
+  type: esb
+  label: HL7 통합 브로커 (Mirth Connect)
+  tech:
+  - Mirth Connect 4.x
+  - HL7 v2.x
+  - HL7 FHIR
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: hsm_onprem
+  type: security
+  label: HSM (의료정보 암호화)
+  tech:
+  - Thales Luna HSM
+  - PKCS#11
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: onprem_lb
+  type: loadbalancer
+  label: 온프레미스 L7 LB
+  tech:
+  - F5 BIG-IP
+  - SSL Offload
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: vpn_gw
+  type: gateway
+  label: ExpressRoute / VPN GW
+  tech:
+  - Azure ExpressRoute
+  - 10Gbps 전용선
+  host: hybrid
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: az_fhir
+  type: service
+  label: Azure Health Data Services (FHIR API)
+  tech:
+  - Azure API for FHIR R4
+  - OAuth 2.0 SMART
+  host: azure
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: az_apim
+  type: gateway
+  label: Azure API Management
+  tech:
+  - Azure APIM
+  - JWT
+  - Rate Limiting
+  host: azure
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: az_b2c
+  type: security
+  label: Azure AD B2C (환자 인증)
+  tech:
+  - Azure AD B2C
+  - OpenID Connect
+  - MFA
+  host: azure
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: telemedicine
+  type: server
+  label: 원격진료 서비스
+  tech:
+  - Node.js 18
+  - WebRTC
+  - Azure App Service
+  host: azure
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: az_blob_img
+  type: storage
+  label: 비임상 이미지 스토리지
+  tech:
+  - Azure Blob Storage
+  - CDN
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_service_bus
+  type: queue
+  label: Azure Service Bus
+  tech:
+  - Azure Service Bus
+  - AMQP 1.0
+  - Topic/Subscription
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: analytics_batch
+  type: service
+  label: 임상 데이터 분석 (배치)
+  tech:
+  - Azure Databricks
+  - Apache Spark 3.3
+  - Delta Lake
+  host: azure
+  metadata:
+    data_source: 익명화 처리 후 전송
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_synapse
+  type: database
+  label: 임상연구 데이터 웨어하우스
+  tech:
+  - Azure Synapse Analytics
+  - Parquet
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: ml_platform
+  type: service
+  label: 의료 AI 플랫폼
+  tech:
+  - Azure Machine Learning
+  - ONNX
+  - Python 3.10
+  host: azure
+  metadata:
+    models:
+    - 진단 보조 모델
+    - 재원기간 예측
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_monitor
+  type: monitoring
+  label: Azure Monitor / Application Insights
+  tech:
+  - Azure Monitor
+  - Log Analytics
+  - KQL
+  host: azure
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: patient_portal
+  type: client
+  label: 환자 포털 (웹·앱)
+  tech:
+  - React 18
+  - Flutter
+  - Azure Static Web Apps
+  host: azure
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+connections:
+- from: onprem_lb
+  to: ehr_app
+  protocol: HTTPS
+- from: ehr_app
+  to: ehr_db
+  protocol: JDBC
+- from: ehr_db
+  to: ehr_db_dr
+  protocol: Oracle Data Guard
+- from: ehr_app
+  to: hl7_broker
+  protocol: HL7 v2.x / MLLP
+- from: hl7_broker
+  to: lis
+  protocol: HL7 v2.x
+- from: hl7_broker
+  to: ris
+  protocol: HL7 v2.x
+- from: ris
+  to: pacs_server
+  protocol: DICOM Worklist
+- from: pacs_server
+  to: pacs_storage
+  protocol: NFS
+- from: ehr_app
+  to: hsm_onprem
+  protocol: PKCS#11
+- from: onprem_lb
+  to: vpn_gw
+  protocol: Internal
+- from: vpn_gw
+  to: az_fhir
+  protocol: ExpressRoute / HTTPS
+- from: hl7_broker
+  to: az_service_bus
+  protocol: AMQP (익명화 이벤트)
+- from: patient_portal
+  to: az_b2c
+  protocol: OpenID Connect
+- from: patient_portal
+  to: az_apim
+  protocol: HTTPS
+- from: az_apim
+  to: az_fhir
+  protocol: REST/FHIR
+- from: az_apim
+  to: telemedicine
+  protocol: REST / WebSocket
+- from: az_service_bus
+  to: analytics_batch
+  protocol: Service Bus SDK
+- from: analytics_batch
+  to: az_synapse
+  protocol: JDBC / Spark Connector
+- from: az_synapse
+  to: ml_platform
+  protocol: Azure ML Dataset
+- from: ml_platform
+  to: az_fhir
+  protocol: FHIR Extension (AI Prediction)
+- from: az_monitor
+  to: az_apim
+  protocol: Diagnostic Settings
+domain: healthcare
+vintage: 2019
+compliance:
+- HIPAA
+- 의료법
+- 개인정보보호법

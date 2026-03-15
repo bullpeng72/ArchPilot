@@ -1,0 +1,539 @@
+name: Large-Scale Logistics & Supply Chain Platform
+description: 2015년 구축된 대규모 물류·공급망 관리 시스템. 일 주문 처리 150만 건, 허브 터미널 220개, 배송 차량 GPS 12만
+  대 실시간 추적. 온프레미스 ERP/WMS + AWS 실시간 트래킹 + Azure ML 수요예측 + GCP BigQuery 분석.
+components:
+- id: shipper_portal
+  type: client
+  label: 화주 포털 (웹/앱)
+  tech:
+  - React 18
+  - Next.js 14
+  - PWA
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: driver_app
+  type: client
+  label: 기사용 앱 (배송 업무)
+  tech:
+  - Flutter 3
+  - Android
+  - 오프라인 동기화
+  host: on-premise
+  metadata:
+    users: 기사 12만 명
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: hub_terminal
+  type: client
+  label: 허브 터미널 단말기 (WMS 클라이언트)
+  tech:
+  - Windows CE
+  - Zebra Scanner
+  - .NET Compact
+  host: on-premise
+  metadata:
+    count: 220개 터미널
+  criticality: medium
+  lifecycle_status: eol
+  data_classification: internal
+- id: iot_gps
+  type: client
+  label: IoT GPS 트래커 (차량 탑재)
+  tech:
+  - LTE-M
+  - MQTT
+  - CoAP
+  - OTA 업데이트
+  host: on-premise
+  metadata:
+    count: 12만 대
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: erp
+  type: server
+  label: ERP (SAP S/4HANA)
+  tech:
+  - SAP S/4HANA 2022
+  - ABAP
+  - HANA DB
+  host: on-premise
+  specs:
+    cpu: 64
+    memory: 1TB
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: wms
+  type: server
+  label: WMS (창고관리 시스템)
+  tech:
+  - Java 11
+  - Spring Boot 2.7
+  - Oracle 19c
+  host: on-premise
+  specs:
+    instances: 8
+    memory: 64GB each
+  criticality: high
+  lifecycle_status: deprecated
+  data_classification: confidential
+- id: tms
+  type: server
+  label: TMS (수·배송 관리 시스템)
+  tech:
+  - Java 11
+  - Spring Boot 2.7
+  - PostgreSQL 14
+  host: on-premise
+  criticality: high
+  lifecycle_status: deprecated
+  data_classification: confidential
+- id: oms
+  type: server
+  label: OMS (주문 관리 시스템)
+  tech:
+  - Java 17
+  - Spring Boot 3
+  - MySQL 8.0
+  host: on-premise
+  specs:
+    instances: 12
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: hub_wcs
+  type: server
+  label: Hub WCS (자동화 설비 제어)
+  tech:
+  - C# .NET 6
+  - PLC OPC-UA
+  - MSSQL 2019
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: onprem_db_oracle
+  type: database
+  label: Oracle RAC (ERP·WMS 공용 DB)
+  tech:
+  - Oracle 19c
+  - RAC
+  - GoldenGate
+  host: on-premise
+  specs:
+    cpu: 32
+    memory: 256GB
+    storage: 100TB SAN
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: onprem_mq
+  type: queue
+  label: 온프레미스 메시지 브로커 (RabbitMQ)
+  tech:
+  - RabbitMQ 3.12
+  - AMQP 0.9.1
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: esb_onprem
+  type: esb
+  label: ESB (SAP PI/PO — ERP 연계)
+  tech:
+  - SAP Process Integration
+  - IDOC
+  - RFC
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: barcode_print
+  type: server
+  label: 바코드·운송장 출력 서버
+  tech:
+  - Java 11
+  - ZPL II
+  - Zebra PrintServer
+  host: on-premise
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: aws_iot_core
+  type: gateway
+  label: AWS IoT Core (GPS 수신)
+  tech:
+  - AWS IoT Core
+  - MQTT 5.0
+  - IoT Rules Engine
+  host: aws
+  specs:
+    connections: 120,000 devices
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: api_gw_aws
+  type: gateway
+  label: AWS API Gateway
+  tech:
+  - AWS API Gateway v2
+  - WAF
+  - JWT
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: tracking_svc
+  type: service
+  label: 실시간 위치 추적 서비스
+  tech:
+  - Go 1.21
+  - WebSocket
+  - gRPC
+  host: aws
+  specs:
+    instances: 20
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: routing_svc
+  type: service
+  label: 경로 최적화 서비스
+  tech:
+  - Python 3.11
+  - OR-Tools
+  - FastAPI
+  host: aws
+  specs:
+    instances: 8
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: notification_svc_aws
+  type: service
+  label: 배송 알림 서비스
+  tech:
+  - Node.js 20
+  - AWS SNS
+  - FCM
+  - AWS SES
+  - Kakao Talk Biz
+  host: aws
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: redis_tracking
+  type: cache
+  label: Redis (차량 최신 위치 캐시)
+  tech:
+  - Amazon ElastiCache Redis 7.2
+  - Geo Commands
+  host: aws
+  specs:
+    nodes: 6 × r7g.4xlarge
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: dynamodb_events
+  type: database
+  label: DynamoDB (배송 이벤트 로그)
+  tech:
+  - Amazon DynamoDB
+  - TTL 90일
+  - Streams
+  host: aws
+  specs:
+    items: 85억 건
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: timestream_gps
+  type: database
+  label: Timestream (GPS 이력 시계열)
+  tech:
+  - Amazon Timestream
+  - S3 Tier 자동 이관
+  host: aws
+  specs:
+    ingestion: 1.2M points/sec peak
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: kinesis_gps
+  type: queue
+  label: Kinesis Data Streams (GPS 이벤트)
+  tech:
+  - Amazon Kinesis
+  - KCL 3.0
+  host: aws
+  specs:
+    shards: 600
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: kinesis_orders
+  type: queue
+  label: Kinesis Data Streams (주문 이벤트)
+  tech:
+  - Amazon Kinesis
+  - KCL 3.0
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: flink_tracking
+  type: service
+  label: Flink (실시간 이상 탐지·ETA 계산)
+  tech:
+  - Amazon Kinesis Analytics
+  - Apache Flink 1.18
+  - ML Inference
+  host: aws
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: s3_data_lake
+  type: storage
+  label: S3 Data Lake (이력 원천)
+  tech:
+  - Amazon S3
+  - Parquet
+  - Delta Lake
+  - Apache Iceberg
+  host: aws
+  specs:
+    capacity: 80PB
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: aws_dx
+  type: gateway
+  label: AWS Direct Connect (온프레미스 연결)
+  tech:
+  - AWS Direct Connect
+  - 10Gbps × 2
+  - BGP
+  host: hybrid
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: cloudwatch_aws
+  type: monitoring
+  label: CloudWatch / Datadog
+  tech:
+  - Amazon CloudWatch
+  - Datadog APM
+  - PagerDuty
+  host: aws
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: az_ml
+  type: service
+  label: Azure ML (수요·물동량 예측)
+  tech:
+  - Azure Machine Learning
+  - Prophet
+  - LightGBM
+  - MLflow
+  host: azure
+  metadata:
+    models:
+    - 단기 수요예측(7일)
+    - 장기 물동량 예측(3개월)
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_synapse
+  type: database
+  label: Azure Synapse (수요 피처 DW)
+  tech:
+  - Azure Synapse Analytics
+  - Apache Spark 3.4
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_data_factory
+  type: service
+  label: Azure Data Factory (ETL 파이프라인)
+  tech:
+  - Azure Data Factory
+  - Mapping Data Flow
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: az_api
+  type: gateway
+  label: Azure API Management (ML 예측 API)
+  tech:
+  - Azure APIM
+  - REST
+  - OAuth 2.0
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: bq_analytics
+  type: database
+  label: BigQuery (사업 분석·KPI 리포트)
+  tech:
+  - Google BigQuery
+  - dbt
+  - Looker Studio
+  host: gcp
+  specs:
+    storage: 40PB
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: dataflow
+  type: service
+  label: Dataflow (실시간 ETL → BigQuery)
+  tech:
+  - Google Dataflow
+  - Apache Beam 2.53
+  host: gcp
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: looker
+  type: client
+  label: Looker (경영진 BI 대시보드)
+  tech:
+  - Looker
+  - LookML
+  - Looker Studio
+  host: gcp
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+connections:
+- from: iot_gps
+  to: aws_iot_core
+  protocol: MQTT over TLS
+- from: aws_iot_core
+  to: kinesis_gps
+  protocol: IoT Rules → Kinesis
+- from: kinesis_gps
+  to: flink_tracking
+  protocol: KCL
+- from: flink_tracking
+  to: redis_tracking
+  protocol: AWS SDK (최신 위치 갱신)
+- from: flink_tracking
+  to: timestream_gps
+  protocol: AWS SDK (이력 저장)
+- from: flink_tracking
+  to: dynamodb_events
+  protocol: AWS SDK (이상 이벤트)
+- from: flink_tracking
+  to: notification_svc_aws
+  protocol: SNS (ETA 변경 알림)
+- from: shipper_portal
+  to: api_gw_aws
+  protocol: HTTPS
+- from: driver_app
+  to: api_gw_aws
+  protocol: HTTPS / WebSocket
+- from: api_gw_aws
+  to: tracking_svc
+  protocol: REST / WebSocket
+- from: api_gw_aws
+  to: routing_svc
+  protocol: REST
+- from: tracking_svc
+  to: redis_tracking
+  protocol: RESP3 (GEOPOS)
+- from: tracking_svc
+  to: dynamodb_events
+  protocol: AWS SDK
+- from: oms
+  to: onprem_mq
+  protocol: AMQP
+- from: onprem_mq
+  to: aws_dx
+  protocol: AMQP Bridge
+- from: aws_dx
+  to: kinesis_orders
+  protocol: Kinesis SDK
+- from: kinesis_orders
+  to: flink_tracking
+  protocol: KCL (주문-배송 매칭)
+- from: kinesis_orders
+  to: s3_data_lake
+  protocol: Firehose
+- from: hub_terminal
+  to: wms
+  protocol: HTTPS / Thin Client
+- from: wms
+  to: onprem_db_oracle
+  protocol: JDBC
+- from: wms
+  to: esb_onprem
+  protocol: SAP RFC / IDOC
+- from: esb_onprem
+  to: erp
+  protocol: IDOC / RFC
+- from: erp
+  to: onprem_db_oracle
+  protocol: HANA DB
+- from: tms
+  to: oms
+  protocol: REST (배차 확정)
+- from: tms
+  to: routing_svc
+  protocol: HTTPS (경로 최적화 요청)
+- from: hub_wcs
+  to: wms
+  protocol: OPC-UA / REST (분류기 이벤트)
+- from: barcode_print
+  to: wms
+  protocol: ZPL / HTTP
+- from: erp
+  to: aws_dx
+  protocol: SAP LT Replication / RFC
+- from: aws_dx
+  to: api_gw_aws
+  protocol: Internal VPC
+- from: s3_data_lake
+  to: dataflow
+  protocol: GCS Transfer / Beam
+- from: dataflow
+  to: bq_analytics
+  protocol: BigQuery Write API
+- from: bq_analytics
+  to: looker
+  protocol: BigQuery Connector
+- from: s3_data_lake
+  to: az_data_factory
+  protocol: Azure Blob → ADF
+- from: az_data_factory
+  to: az_synapse
+  protocol: Synapse Connector
+- from: az_synapse
+  to: az_ml
+  protocol: ML Dataset
+- from: az_ml
+  to: az_api
+  protocol: REST (배포 엔드포인트)
+- from: az_api
+  to: routing_svc
+  protocol: REST (수요예측 → 경로 최적화)
+- from: cloudwatch_aws
+  to: tracking_svc
+  protocol: CloudWatch Agent
+- from: cloudwatch_aws
+  to: flink_tracking
+  protocol: CloudWatch Metrics
+domain: logistics
+vintage: 2015
+scale:
+  daily_active_users: 1500000
+  peak_tps: 5000
+  data_volume_gb: 80000000

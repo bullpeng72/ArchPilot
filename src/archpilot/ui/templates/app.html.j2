@@ -18,7 +18,7 @@
 
   <style>
     /* ── 공통 변수 ────────────────────────────────────────────────── */
-    :root { --sidebar-w: 260px; }
+    :root { --sidebar-w: 260px; --report-w: 360px; }
 
     /* ── 라이트 테마 (기본) ──────────────────────────────────────── */
     /*    모든 색상값: WCAG AA 기준 대비비 4.5:1 이상 확보           */
@@ -160,8 +160,7 @@
     .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
     .diagram-section {
-      flex: 1; display: flex; flex-direction: column;
-      border-bottom: 1px solid var(--border); min-height: 0;
+      flex: 1; display: flex; flex-direction: column; min-height: 0;
     }
     .diagram-tabs {
       display: flex; border-bottom: 1px solid var(--border);
@@ -237,15 +236,72 @@
     .empty-state h3 { font-size: 15px; font-weight: 600; color: var(--text); }
     .empty-state p  { font-size: 13px; text-align: center; max-width: 280px; line-height: 1.6; }
 
-    .info-section {
-      height: 220px; min-height: 180px;
-      background: var(--bg2); display: flex; flex-direction: column;
+    /* ── Report Panel ────────────────────────────────────────────── */
+    .report-panel {
+      width: var(--report-w); min-width: 220px; max-width: 640px;
+      background: var(--bg2); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+      flex-shrink: 0; position: relative;
     }
-    .info-tabs {
-      display: flex; border-bottom: 1px solid var(--border);
-      background: var(--bg); padding: 0 16px; flex-shrink: 0;
+    .report-panel.collapsed { width: 36px !important; min-width: 36px; }
+    .report-panel-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 12px; height: 42px; min-height: 42px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2); flex-shrink: 0;
     }
-    .info-content { flex: 1; overflow-y: auto; padding: 12px 16px; }
+    .report-panel-header h3 { font-size: 12.5px; font-weight: 700; flex: 1; }
+    .report-panel.collapsed .report-panel-body,
+    .report-panel.collapsed .report-panel-header h3,
+    .report-panel.collapsed .rph-actions { display: none; }
+    .report-panel.collapsed .report-panel-header {
+      height: 42px; justify-content: center; padding: 0;
+    }
+    /* 수직 제목 (패널 닫힘 시) */
+    .report-panel-vtitle {
+      display: none;
+      writing-mode: vertical-rl; text-orientation: mixed;
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      letter-spacing: .5px; cursor: pointer; padding: 12px 0;
+      transition: color .15s;
+    }
+    .report-panel-vtitle:hover { color: var(--accent); }
+    .report-panel.collapsed .report-panel-vtitle { display: block; }
+    .report-panel-body { flex: 1; overflow-y: auto; }
+    /* 리사이즈 핸들 */
+    .resize-handle-v {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      cursor: col-resize; z-index: 5; transition: background .15s;
+    }
+    .resize-handle-v:hover,
+    .resize-handle-v.resizing { background: var(--accent); }
+    /* 아코디언 섹션 */
+    .rs {
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .rs.locked .rs-header { opacity: .45; cursor: default; pointer-events: none; }
+    .rs-header {
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 12px; cursor: pointer; user-select: none;
+      font-size: 12.5px; font-weight: 600; color: var(--text);
+      transition: background .12s;
+    }
+    .rs-header:hover { background: var(--bg3); }
+    .rs-icon { font-size: 13px; flex-shrink: 0; line-height: 1; }
+    .rs-chevron {
+      margin-left: auto; font-size: 10px; color: var(--muted);
+      transition: transform .18s; flex-shrink: 0;
+    }
+    .rs-header.open .rs-chevron { transform: rotate(180deg); }
+    .rs-lock { margin-left: auto; font-size: 11px; color: var(--muted); opacity: .5; }
+    .rs-body { padding: 12px 14px; background: var(--bg); }
+    .rs-copy {
+      font-size: 10.5px; padding: 1px 6px; border-radius: 4px; margin-left: 4px;
+      border: 1px solid var(--border); background: var(--bg3); color: var(--muted);
+      cursor: pointer; opacity: 0; transition: opacity .12s; line-height: 1.5;
+    }
+    .rs-header:hover .rs-copy { opacity: 1; }
+    .rs-copy:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Form Controls ───────────────────────────────────────────── */
     textarea, input[type=text] {
@@ -790,10 +846,42 @@
           </div>
         </div>
       </template>
+      <!-- 분석 결과 시나리오 권고 배지 -->
+      <template x-if="state.analysis?.recommended_scenario">
+        <div style="margin-top:8px; padding:8px; background:var(--bg3); border-radius:6px; border:1px solid var(--border);">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">권고 시나리오</div>
+          <div style="font-size:12.5px; font-weight:600;"
+               :style="{color: {full_replace:'var(--danger)', partial:'var(--warn)', additive:'var(--success)'}[state.analysis.recommended_scenario] ?? 'var(--text)'}">
+            <span x-text="{full_replace:'전체 교체', partial:'일부 보존', additive:'신규 추가'}[state.analysis.recommended_scenario] ?? state.analysis.recommended_scenario"></span>
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:3px; line-height:1.5;"
+               x-text="state.analysis.scenario_rationale"></div>
+        </div>
+      </template>
+
       <div class="divider"></div>
       <div class="panel-title">현대화 요구사항</div>
       <textarea x-model="requirements" rows="5"
         placeholder="AWS 마이크로서비스, EKS, RDS Aurora, ElastiCache Redis, S3, CloudFront CDN, API Gateway..."></textarea>
+
+      <!-- 시나리오 선택 -->
+      <div style="margin-top:8px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">
+          현대화 시나리오
+          <template x-if="state.analysis?.recommended_scenario">
+            <span style="color:var(--accent); cursor:pointer; margin-left:4px;"
+                  @click="scenario = state.analysis.recommended_scenario"
+                  title="분석 결과 권고 시나리오 적용">(권고 적용)</span>
+          </template>
+        </div>
+        <select x-model="scenario" style="width:100%; padding:5px 8px; border:1px solid var(--border); border-radius:5px; background:var(--bg3); color:var(--text); font-size:12.5px;">
+          <option value="">자동 (분석 결과 따름)</option>
+          <option value="full_replace">전체 교체 — 아키텍처 완전 재설계</option>
+          <option value="partial">일부 보존 — 핵심 유지 + 주변부 현대화</option>
+          <option value="additive">신규 추가 — 기존 유지 + 기능 확장</option>
+        </select>
+      </div>
+
       <button class="btn btn-primary" style="width:100%; margin-top:6px;"
               :disabled="!requirements.trim() || loading"
               @click="startModernize()">
@@ -817,6 +905,12 @@
       <div class="divider"></div>
       <div style="font-size:12px; color:var(--muted); margin-bottom:5px;">요구사항 수정 후 재생성</div>
       <textarea x-model="requirements" rows="4"></textarea>
+      <select x-model="scenario" style="width:100%; padding:4px 8px; border:1px solid var(--border); border-radius:5px; background:var(--bg3); color:var(--text); font-size:12px; margin-top:5px;">
+        <option value="">자동</option>
+        <option value="full_replace">전체 교체</option>
+        <option value="partial">일부 보존</option>
+        <option value="additive">신규 추가</option>
+      </select>
       <button class="btn btn-sm" style="width:100%; margin-top:5px;"
               :disabled="!requirements.trim() || loading"
               @click="startModernize()">🔄 재생성</button>
@@ -1061,26 +1155,46 @@
 
   </div><!-- /diagram-section -->
 
-  <!-- 정보 섹션 -->
-  <div class="info-section" x-show="state.system && activeStep > 0">
-    <div class="info-tabs">
-      <button class="tab-btn" :class="{ active: infoTab === 'summary' }"
-              @click="infoTab = 'summary'">요약</button>
-      <button class="tab-btn" :class="{ active: infoTab === 'analysis' }"
-              @click="infoTab = 'analysis'"
-              x-show="state.analysis">분석 결과</button>
-      <button class="tab-btn" :class="{ active: infoTab === 'diff' }"
-              @click="infoTab = 'diff'"
-              x-show="state.modern">Before/After</button>
-      <button class="tab-btn" :class="{ active: infoTab === 'plan' }"
-              @click="infoTab = 'plan'"
-              x-show="state.migration_plan">마이그레이션</button>
-    </div>
+</main>
 
-    <div class="info-content">
+<!-- ── Report Panel ───────────────────────────────────────────────────────── -->
+<aside class="report-panel"
+       :class="{collapsed: !reportOpen}"
+       :style="reportOpen ? 'width:' + reportWidth + 'px' : ''">
 
-      <!-- 요약 -->
-      <div x-show="infoTab === 'summary'">
+  <!-- 리사이즈 핸들 (좌측 드래그) -->
+  <div class="resize-handle-v" @mousedown.prevent="startPanelResize($event)"></div>
+
+  <!-- 패널 헤더 -->
+  <div class="report-panel-header">
+    <!-- 닫힘 상태: 토글 버튼만 표시 -->
+    <button style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;
+                   border:1px solid var(--border);border-radius:5px;background:var(--bg3);
+                   color:var(--muted);cursor:pointer;font-size:14px;flex-shrink:0;"
+            @click="reportOpen=!reportOpen"
+            :title="reportOpen ? '패널 닫기' : '패널 열기'">
+      <span x-text="reportOpen ? '›' : '‹'"></span>
+    </button>
+    <span style="font-size:15px;" x-show="reportOpen">📊</span>
+    <h3 x-show="reportOpen">분석 리포트</h3>
+    <div class="rph-actions" x-show="reportOpen" style="display:flex;gap:4px;margin-left:auto;"></div>
+  </div>
+  <!-- 수직 제목 (닫힘 시) -->
+  <div class="report-panel-vtitle" @click="reportOpen=true">📊 분석 리포트</div>
+
+  <div class="report-panel-body">
+
+    <!-- ① 요약 -->
+    <div class="rs" :class="{locked: !state.system}">
+      <div class="rs-header" :class="{open: reportSections.summary}"
+           @click="toggleSection('summary', !!state.system)">
+        <span class="rs-icon">📦</span>
+        <span>요약</span>
+        <button class="rs-copy" @click.stop="copySection('summary')" title="섹션 복사">📋</button>
+        <template x-if="!state.system"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.system"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.summary">
         <template x-if="state.system">
           <div>
             <div class="kv-grid" style="margin-bottom:10px;">
@@ -1112,9 +1226,19 @@
           </div>
         </template>
       </div>
+    </div>
 
-      <!-- 분석 결과 -->
-      <div x-show="infoTab === 'analysis'" x-cloak>
+    <!-- ② 분석 결과 -->
+    <div class="rs" :class="{locked: !state.analysis}">
+      <div class="rs-header" :class="{open: reportSections.analysis}"
+           @click="toggleSection('analysis', !!state.analysis)">
+        <span class="rs-icon">🔍</span>
+        <span>분석 결과</span>
+        <button class="rs-copy" @click.stop="copySection('analysis')" title="섹션 복사">📋</button>
+        <template x-if="!state.analysis"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.analysis"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.analysis">
         <template x-if="state.analysis">
           <div style="display:flex; flex-direction:column; gap:18px;">
 
@@ -1238,17 +1362,174 @@
               </div>
             </template>
 
+            <!-- 현대화 시나리오 권고 -->
+            <template x-if="state.analysis.recommended_scenario">
+              <div style="border:1px solid var(--border); border-radius:8px; padding:12px;">
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:8px; font-weight:700;">🎯 현대화 시나리오 권고</div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                  <span style="font-size:13px; font-weight:700; padding:3px 10px; border-radius:12px;"
+                        :style="{
+                          background: {full_replace:'#fde8e8', partial:'#fff3cd', additive:'#e8f5e9'}[state.analysis.recommended_scenario] ?? 'var(--bg3)',
+                          color:      {full_replace:'#b85450', partial:'#856404', additive:'#3d8a4e'}[state.analysis.recommended_scenario] ?? 'var(--text)',
+                        }"
+                        x-text="{full_replace:'전체 교체 (Full Replace)', partial:'일부 보존 (Partial)', additive:'신규 추가 (Additive)'}[state.analysis.recommended_scenario] ?? state.analysis.recommended_scenario">
+                  </span>
+                </div>
+                <div style="font-size:12px; color:var(--muted); line-height:1.6;" x-text="state.analysis.scenario_rationale"></div>
+              </div>
+            </template>
+
+            <!-- 레거시 아키텍처 품질 -->
+            <template x-if="state.analysis.legacy_quality">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:8px; font-weight:700;">📊 레거시 아키텍처 품질</div>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                  <template x-for="[dim, label] in [['performance','성능'],['scalability','확장성'],['cost','비용효율'],['security','보안'],['operability','운영성']]">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                      <span style="width:54px; color:var(--muted); font-size:11px;" x-text="label"></span>
+                      <div style="flex:1; background:var(--border); border-radius:4px; height:7px; overflow:hidden;">
+                        <div :style="`width:${(state.analysis.legacy_quality[dim]?.score ?? 50)}%; height:100%; border-radius:4px; background:${(state.analysis.legacy_quality[dim]?.score ?? 50) >= 70 ? '#82b366' : (state.analysis.legacy_quality[dim]?.score ?? 50) >= 40 ? '#d79b00' : '#b85450'};`"></div>
+                      </div>
+                      <span style="width:32px; text-align:right; font-weight:700; font-size:11px;" x-text="(state.analysis.legacy_quality[dim]?.score ?? 50)"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- 컴포넌트별 전략 결정 -->
+            <template x-if="(state.analysis.component_decisions ?? []).length > 0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px; font-weight:700;">⚙️ 컴포넌트별 현대화 전략</div>
+                <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border);">
+                      <th style="text-align:left; padding:3px 6px; color:var(--muted); font-weight:600; width:100px;">컴포넌트</th>
+                      <th style="text-align:center; padding:3px 6px; color:var(--muted); font-weight:600; width:80px;">전략</th>
+                      <th style="text-align:left; padding:3px 6px; color:var(--muted); font-weight:600;">근거</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="dec in state.analysis.component_decisions ?? []">
+                      <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:4px 6px; color:var(--accent); font-weight:600; font-size:11px;" x-text="dec.component_id"></td>
+                        <td style="padding:4px 6px; text-align:center;">
+                          <span style="font-size:10.5px; padding:1px 6px; border-radius:3px; font-weight:700;"
+                                :style="{
+                                  background: {keep:'#e8f5e9',rehost:'#e3f0fb',replatform:'#e3f0fb',refactor:'#fff3cd',replace:'#fde8e8',retire:'#f3f3f3'}[dec.action]??'var(--bg3)',
+                                  color:      {keep:'#3d8a4e',rehost:'#1565c0',replatform:'#1565c0',refactor:'#856404',replace:'#b85450',retire:'#888'}[dec.action]??'var(--text)',
+                                }"
+                                x-text="dec.action"></span>
+                        </td>
+                        <td style="padding:4px 6px; color:var(--muted); line-height:1.4;" x-text="dec.rationale"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+
           </div>
         </template>
       </div>
+    </div>
 
-      <!-- Before/After -->
-      <div x-show="infoTab === 'diff'" x-cloak>
+    <!-- ③ 🧠 RMC 분석 자기평가 -->
+    <div class="rs" :class="{locked: !state.analysis_rmc}">
+      <div class="rs-header" :class="{open: reportSections.rmc_analysis}"
+           @click="toggleSection('rmc_analysis', !!state.analysis_rmc)">
+        <span class="rs-icon">🧠</span>
+        <span>RMC 평가</span>
+        <button class="rs-copy" @click.stop="copySection('rmc_analysis')" title="섹션 복사">📋</button>
+        <template x-if="!state.analysis_rmc"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.analysis_rmc"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.rmc_analysis">
+        <template x-if="state.analysis_rmc">
+          <div style="display:flex; flex-direction:column; gap:18px;">
+
+            <!-- 커버리지 점수 -->
+            <div>
+              <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">🎯 분석 커버리지</div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="flex:1; background:var(--border); border-radius:6px; height:10px; overflow:hidden;">
+                  <div :style="`width:${state.analysis_rmc.coverage_score}%; height:100%; border-radius:6px;
+                    background:${state.analysis_rmc.coverage_score>=80?'#82b366':state.analysis_rmc.coverage_score>=60?'#d79b00':'#b85450'};`"></div>
+                </div>
+                <span style="font-size:12px; font-weight:700; min-width:44px; text-align:right;"
+                      :style="`color:${state.analysis_rmc.coverage_score>=80?'var(--success,#3d8a4e)':state.analysis_rmc.coverage_score>=60?'#b87800':'#b85450'}`"
+                      x-text="state.analysis_rmc.coverage_score + '/100'"></span>
+                <span style="font-size:11px; padding:2px 8px; border-radius:10px; font-weight:700;"
+                      :style="`background:${ {'high':'#e8f5e9','medium':'#fff3cd','low':'#fde8e8'}[state.analysis_rmc.confidence_level]||'var(--bg3)'};
+                               color:${ {'high':'#3d8a4e','medium':'#856404','low':'#b85450'}[state.analysis_rmc.confidence_level]||'var(--text)'};`"
+                      x-text="{'high':'신뢰도 높음','medium':'신뢰도 보통','low':'신뢰도 낮음'}[state.analysis_rmc.confidence_level]??state.analysis_rmc.confidence_level"></span>
+              </div>
+              <p style="font-size:12px; color:var(--muted); margin-top:6px; line-height:1.5;"
+                 x-text="state.analysis_rmc.confidence_rationale"></p>
+            </div>
+
+            <template x-if="(state.analysis_rmc.assumptions??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">💭 분석 중 가정한 사항</div>
+                <ul class="pain-list">
+                  <template x-for="a in state.analysis_rmc.assumptions">
+                    <li x-text="a" style="color:var(--text);"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <template x-if="(state.analysis_rmc.blind_spots??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:#b87800; font-weight:700; margin-bottom:6px;">⚠️ 놓쳤을 수 있는 사각지대</div>
+                <ul class="pain-list">
+                  <template x-for="b in state.analysis_rmc.blind_spots">
+                    <li x-text="b" style="color:var(--text);"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <template x-if="(state.analysis_rmc.verification_questions??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:6px;">❓ 현장 확인이 필요한 질문</div>
+                <ol style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:6px;">
+                  <template x-for="q in state.analysis_rmc.verification_questions">
+                    <li style="font-size:12.5px; line-height:1.6; color:var(--text);" x-text="q"></li>
+                  </template>
+                </ol>
+              </div>
+            </template>
+
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ④ Before/After diff -->
+    <div class="rs" :class="{locked: !state.modern}">
+      <div class="rs-header" :class="{open: reportSections.diff}"
+           @click="toggleSection('diff', !!state.modern)">
+        <span class="rs-icon">🔀</span>
+        <span>Before / After</span>
+        <button class="rs-copy" @click.stop="copySection('diff')" title="섹션 복사">📋</button>
+        <template x-if="!state.modern"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.modern"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.diff">
         <template x-if="diff">
           <div style="display:flex; flex-direction:column; gap:12px;">
 
-            <!-- 전략 요약 칩 -->
-            <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:11.5px;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:11.5px; align-items:center;">
+              <template x-if="state.scenario">
+                <span style="padding:2px 10px;border-radius:10px;font-weight:700;"
+                      :style="{
+                        background:{full_replace:'#fde8e8',partial:'#fff3cd',additive:'#e8f5e9'}[state.scenario]??'var(--bg3)',
+                        color:{full_replace:'#b85450',partial:'#856404',additive:'#3d8a4e'}[state.scenario]??'var(--text)',
+                      }"
+                      x-text="{full_replace:'전체 교체',partial:'일부 보존',additive:'신규 추가'}[state.scenario]??state.scenario">
+                </span>
+              </template>
               <template x-if="(diff.added??[]).length>0">
                 <span style="background:#e8f5e9;color:#3d8a4e;padding:2px 8px;border-radius:10px;">
                   ✨ 신규 <strong x-text="(diff.added??[]).length"></strong>
@@ -1332,16 +1613,359 @@
           </div>
         </template>
       </div>
+    </div>
 
-      <!-- 마이그레이션 -->
-      <div x-show="infoTab === 'plan'" x-cloak>
+    <!-- ⑤ 📐 설계 해설 -->
+    <div class="rs" :class="{locked: !state.design_rationale}">
+      <div class="rs-header" :class="{open: reportSections.rationale}"
+           @click="toggleSection('rationale', !!state.design_rationale)">
+        <span class="rs-icon">📐</span>
+        <span>설계 해설</span>
+        <button class="rs-copy" @click.stop="copySection('rationale')" title="섹션 복사">📋</button>
+        <template x-if="!state.design_rationale"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.design_rationale"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.rationale">
+        <template x-if="state.design_rationale">
+          <div style="display:flex; flex-direction:column; gap:20px;">
+
+            <div style="padding:12px; background:var(--bg3); border-radius:8px; border-left:3px solid var(--accent);">
+              <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:6px;">🏛️ 설계 철학</div>
+              <p style="font-size:13px; line-height:1.7; color:var(--text); margin:0;"
+                 x-text="state.design_rationale.design_philosophy"></p>
+            </div>
+
+            <div>
+              <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:10px;">🔑 주요 설계 결정</div>
+              <div style="display:flex; flex-direction:column; gap:14px;">
+                <template x-for="(dec, idx) in (state.design_rationale.key_decisions??[])">
+                  <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+                    <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--bg3);">
+                      <span style="font-size:11px; font-weight:700; color:var(--accent); min-width:20px;"
+                            x-text="idx+1+'.'"</span>
+                      <span style="font-size:11.5px; font-weight:700; color:var(--text);" x-text="dec.area"></span>
+                    </div>
+                    <div style="padding:8px 12px; border-bottom:1px solid var(--border);">
+                      <div style="font-size:11px; color:var(--muted); font-weight:600; margin-bottom:3px;">선택</div>
+                      <div style="font-size:12.5px; color:var(--text); font-weight:600;" x-text="dec.decision"></div>
+                    </div>
+                    <div style="padding:8px 12px; border-bottom:1px solid var(--border); background:rgba(0,100,255,0.03);">
+                      <div style="font-size:11px; color:var(--muted); font-weight:600; margin-bottom:3px;">왜 이 선택인가</div>
+                      <div style="font-size:12.5px; color:var(--text); line-height:1.6;" x-text="dec.rationale"></div>
+                    </div>
+                    <div style="display:flex; gap:0; border-bottom:1px solid var(--border);">
+                      <div style="flex:1; padding:8px 12px; border-right:1px solid var(--border);">
+                        <div style="font-size:11px; color:#b85450; font-weight:600; margin-bottom:4px;">❌ 기각된 대안</div>
+                        <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:3px;">
+                          <template x-for="alt in (dec.alternatives_rejected??[])">
+                            <li style="font-size:11.5px; color:var(--muted); line-height:1.5;" x-text="alt"></li>
+                          </template>
+                        </ul>
+                      </div>
+                      <div style="flex:1; padding:8px 12px;">
+                        <div style="font-size:11px; color:#b87800; font-weight:600; margin-bottom:4px;">⚖️ 트레이드오프</div>
+                        <ul style="margin:0; padding-left:14px; display:flex; flex-direction:column; gap:3px;">
+                          <template x-for="to in (dec.tradeoffs??[])">
+                            <li style="font-size:11.5px; color:var(--muted); line-height:1.5;" x-text="to"></li>
+                          </template>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- 아키텍처 품질 평가 -->
+            <template x-if="state.design_rationale.arch_quality_eval">
+              <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+                <div style="padding:8px 12px; background:var(--bg3); font-size:11.5px; font-weight:700; color:var(--text);">
+                  📊 SW 아키텍처 품질 평가
+                </div>
+                <div style="padding:12px; display:flex; flex-direction:column; gap:12px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:11.5px; color:var(--muted); min-width:80px;">종합 점수</span>
+                    <div style="flex:1; background:var(--border); border-radius:4px; height:10px; overflow:hidden;">
+                      <div :style="`width:${state.design_rationale.arch_quality_eval.overall_score}%; height:100%; border-radius:4px;
+                        background:${state.design_rationale.arch_quality_eval.overall_score>=80?'#82b366':state.design_rationale.arch_quality_eval.overall_score>=60?'#d79b00':'#b85450'};`"></div>
+                    </div>
+                    <span style="font-size:13px; font-weight:700; min-width:44px; text-align:right;"
+                          x-text="state.design_rationale.arch_quality_eval.overall_score+'/100'"></span>
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px; color:var(--accent); font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px;">핵심 품질 속성</div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                      <template x-for="[key, label] in [['maintainability','유지보수성'],['performance','성능'],['scalability','확장성'],['reliability','신뢰성'],['security','보안성']]">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="font-size:11px; color:var(--muted); min-width:72px;" x-text="label"></span>
+                          <div style="flex:1; background:var(--border); border-radius:3px; height:6px; overflow:hidden;">
+                            <div :style="`width:${state.design_rationale.arch_quality_eval[key]??75}%; height:100%; border-radius:3px;
+                              background:${(state.design_rationale.arch_quality_eval[key]??75)>=80?'#82b366':(state.design_rationale.arch_quality_eval[key]??75)>=60?'#d79b00':'#b85450'};`"></div>
+                          </div>
+                          <span style="font-size:11px; font-weight:600; min-width:30px; text-align:right; color:var(--text);"
+                                x-text="state.design_rationale.arch_quality_eval[key]??75"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px; color:#6a8759; font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px;">구조적 요소</div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                      <template x-for="[key, label] in [['simplicity','단순성'],['modularity','모듈화'],['understandability','이해 가능성'],['flexibility','유연성·재사용성']]">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="font-size:11px; color:var(--muted); min-width:72px;" x-text="label"></span>
+                          <div style="flex:1; background:var(--border); border-radius:3px; height:6px; overflow:hidden;">
+                            <div :style="`width:${state.design_rationale.arch_quality_eval[key]??75}%; height:100%; border-radius:3px;
+                              background:${(state.design_rationale.arch_quality_eval[key]??75)>=80?'#82b366':(state.design_rationale.arch_quality_eval[key]??75)>=60?'#d79b00':'#b85450'};`"></div>
+                          </div>
+                          <span style="font-size:11px; font-weight:600; min-width:30px; text-align:right; color:var(--text);"
+                                x-text="state.design_rationale.arch_quality_eval[key]??75"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px; color:#b87800; font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px;">평가·검증</div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                      <template x-for="[key, label] in [['testability','테스트 가능성'],['risk_management','위험 조기 발견'],['nfr_compliance','비기능 요건 준수']]">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="font-size:11px; color:var(--muted); min-width:72px;" x-text="label"></span>
+                          <div style="flex:1; background:var(--border); border-radius:3px; height:6px; overflow:hidden;">
+                            <div :style="`width:${state.design_rationale.arch_quality_eval[key]??75}%; height:100%; border-radius:3px;
+                              background:${(state.design_rationale.arch_quality_eval[key]??75)>=80?'#82b366':(state.design_rationale.arch_quality_eval[key]??75)>=60?'#d79b00':'#b85450'};`"></div>
+                          </div>
+                          <span style="font-size:11px; font-weight:600; min-width:30px; text-align:right; color:var(--text);"
+                                x-text="state.design_rationale.arch_quality_eval[key]??75"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                  <template x-if="(state.design_rationale.arch_quality_eval.strengths??[]).length>0">
+                    <div>
+                      <div style="font-size:11px; color:#3d8a4e; font-weight:600; margin-bottom:4px;">✅ 강점</div>
+                      <ul class="pain-list">
+                        <template x-for="s in state.design_rationale.arch_quality_eval.strengths">
+                          <li x-text="s"></li>
+                        </template>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="(state.design_rationale.arch_quality_eval.weaknesses??[]).length>0">
+                    <div>
+                      <div style="font-size:11px; color:#b85450; font-weight:600; margin-bottom:4px;">⚠️ 개선 필요 영역</div>
+                      <ul class="pain-list">
+                        <template x-for="w in state.design_rationale.arch_quality_eval.weaknesses">
+                          <li x-text="w"></li>
+                        </template>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="(state.design_rationale.arch_quality_eval.improvement_recommendations??[]).length>0">
+                    <div>
+                      <div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:4px;">🔧 개선 방안</div>
+                      <ul class="pain-list">
+                        <template x-for="r in state.design_rationale.arch_quality_eval.improvement_recommendations">
+                          <li x-text="r"></li>
+                        </template>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="state.design_rationale.arch_quality_eval.business_tradeoff_summary">
+                    <div style="padding:8px 10px; background:rgba(0,100,255,0.04); border-radius:6px; border-left:3px solid var(--accent);">
+                      <div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:3px;">비즈니스 타협점</div>
+                      <p style="font-size:12.5px; line-height:1.6; color:var(--text); margin:0;"
+                         x-text="state.design_rationale.arch_quality_eval.business_tradeoff_summary"></p>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- RMC 자기평가 -->
+            <template x-if="state.design_rationale.rmc_self_eval">
+              <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+                <div style="padding:8px 12px; background:var(--bg3); font-size:11.5px; font-weight:700; color:var(--text);">
+                  🧠 설계 자기평가 (RMC)
+                </div>
+                <div style="padding:12px; display:flex; flex-direction:column; gap:12px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:11.5px; color:var(--muted); min-width:80px;">기능 커버리지</span>
+                    <div style="flex:1; background:var(--border); border-radius:4px; height:8px; overflow:hidden;">
+                      <div :style="`width:${state.design_rationale.rmc_self_eval.completeness_score}%; height:100%; border-radius:4px;
+                        background:${state.design_rationale.rmc_self_eval.completeness_score>=80?'#82b366':state.design_rationale.rmc_self_eval.completeness_score>=60?'#d79b00':'#b85450'};`"></div>
+                    </div>
+                    <span style="font-size:12px; font-weight:700; min-width:44px; text-align:right;"
+                          x-text="state.design_rationale.rmc_self_eval.completeness_score+'/100'"></span>
+                    <span style="font-size:11px; padding:1px 7px; border-radius:10px; font-weight:700;"
+                          :style="`background:${ {'high':'#e8f5e9','medium':'#fff3cd','low':'#fde8e8'}[state.design_rationale.rmc_self_eval.confidence_level]||'var(--bg3)'};
+                                   color:${ {'high':'#3d8a4e','medium':'#856404','low':'#b85450'}[state.design_rationale.rmc_self_eval.confidence_level]||'var(--text)'};`"
+                          x-text="{'high':'확신 높음','medium':'확신 보통','low':'확신 낮음'}[state.design_rationale.rmc_self_eval.confidence_level]??''"></span>
+                  </div>
+                  <template x-if="(state.design_rationale.rmc_self_eval.coverage_gaps??[]).length>0">
+                    <div>
+                      <div style="font-size:11px; color:#b87800; font-weight:600; margin-bottom:4px;">미충족 영역</div>
+                      <ul class="pain-list">
+                        <template x-for="g in state.design_rationale.rmc_self_eval.coverage_gaps">
+                          <li x-text="g"></li>
+                        </template>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="(state.design_rationale.rmc_self_eval.design_risks??[]).length>0">
+                    <div>
+                      <div style="font-size:11px; color:#b85450; font-weight:600; margin-bottom:4px;">잠재적 설계 위험</div>
+                      <ul class="pain-list">
+                        <template x-for="r in state.design_rationale.rmc_self_eval.design_risks">
+                          <li x-text="r"></li>
+                        </template>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="(state.design_rationale.rmc_self_eval.improvement_suggestions??[]).length>0">
+                    <div>
+                      <div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:4px;">개선 제안</div>
+                      <ul class="pain-list">
+                        <template x-for="s in state.design_rationale.rmc_self_eval.improvement_suggestions">
+                          <li x-text="s"></li>
+                        </template>
+                      </ul>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ⑥ 마이그레이션 계획 -->
+    <div class="rs" :class="{locked: !state.migration_plan}">
+      <div class="rs-header" :class="{open: reportSections.plan}"
+           @click="toggleSection('plan', !!state.migration_plan)">
+        <span class="rs-icon">🗺️</span>
+        <span>마이그레이션 계획</span>
+        <button class="rs-copy" @click.stop="copySection('plan')" title="섹션 복사">📋</button>
+        <template x-if="!state.migration_plan"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.migration_plan"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.plan">
         <div class="migration-box" x-text="state.migration_plan"></div>
       </div>
+    </div>
 
-    </div><!-- /info-content -->
-  </div><!-- /info-section -->
+    <!-- ⑦ 📋 계획 RMC -->
+    <div class="rs" :class="{locked: !state.migration_plan_rmc}">
+      <div class="rs-header" :class="{open: reportSections.plan_rmc}"
+           @click="toggleSection('plan_rmc', !!state.migration_plan_rmc)">
+        <span class="rs-icon">📋</span>
+        <span>계획 RMC</span>
+        <button class="rs-copy" @click.stop="copySection('plan_rmc')" title="섹션 복사">📋</button>
+        <template x-if="!state.migration_plan_rmc"><span class="rs-lock">🔒</span></template>
+        <template x-if="state.migration_plan_rmc"><span class="rs-chevron">▼</span></template>
+      </div>
+      <div class="rs-body" x-show="reportSections.plan_rmc">
+        <template x-if="state.migration_plan_rmc">
+          <div style="display:flex; flex-direction:column; gap:16px;">
 
-</main>
+            <div style="padding:12px; background:var(--bg3); border-radius:8px;">
+              <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:8px;">📋 마이그레이션 계획 완성도 (RMC)</div>
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <span style="font-size:11.5px; color:var(--muted); min-width:60px;">완성도</span>
+                <div style="flex:1; background:var(--border); border-radius:4px; height:10px; overflow:hidden;">
+                  <div :style="`width:${state.migration_plan_rmc.completeness_score}%; height:100%; border-radius:4px;
+                    background:${state.migration_plan_rmc.completeness_score>=80?'#82b366':state.migration_plan_rmc.completeness_score>=60?'#d79b00':'#b85450'};`"></div>
+                </div>
+                <span style="font-size:13px; font-weight:700; min-width:44px; text-align:right;"
+                      x-text="state.migration_plan_rmc.completeness_score+'/100'"></span>
+                <span style="font-size:11px; padding:2px 8px; border-radius:10px; font-weight:700;"
+                      :style="`background:${ {'high':'#e8f5e9','medium':'#fff3cd','low':'#fde8e8'}[state.migration_plan_rmc.confidence_level]||'var(--bg3)'};
+                               color:${ {'high':'#3d8a4e','medium':'#856404','low':'#b85450'}[state.migration_plan_rmc.confidence_level]||'var(--text)'};`"
+                      x-text="{'high':'신뢰도 높음','medium':'신뢰도 보통','low':'신뢰도 낮음'}[state.migration_plan_rmc.confidence_level]??state.migration_plan_rmc.confidence_level"></span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                <template x-if="state.migration_plan_rmc.rollback_adequacy">
+                  <div style="padding:8px 10px; background:rgba(0,100,255,0.04); border-radius:6px; border-left:3px solid #6a8759;">
+                    <div style="font-size:11px; color:#6a8759; font-weight:600; margin-bottom:3px;">🔄 롤백 계획 평가</div>
+                    <p style="font-size:12.5px; line-height:1.6; color:var(--text); margin:0;"
+                       x-text="state.migration_plan_rmc.rollback_adequacy"></p>
+                  </div>
+                </template>
+                <template x-if="state.migration_plan_rmc.timeline_realism">
+                  <div style="padding:8px 10px; background:rgba(0,100,255,0.04); border-radius:6px; border-left:3px solid #b87800;">
+                    <div style="font-size:11px; color:#b87800; font-weight:600; margin-bottom:3px;">⏱️ 일정 현실성 평가</div>
+                    <p style="font-size:12.5px; line-height:1.6; color:var(--text); margin:0;"
+                       x-text="state.migration_plan_rmc.timeline_realism"></p>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <template x-if="(state.migration_plan_rmc.well_covered_phases??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:#3d8a4e; font-weight:700; margin-bottom:6px;">✅ 잘 다뤄진 단계</div>
+                <ul class="pain-list">
+                  <template x-for="p in state.migration_plan_rmc.well_covered_phases">
+                    <li style="color:var(--text);" x-text="p"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <template x-if="(state.migration_plan_rmc.missing_aspects??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:#b87800; font-weight:700; margin-bottom:6px;">🔍 누락된 관점</div>
+                <ul class="pain-list">
+                  <template x-for="m in state.migration_plan_rmc.missing_aspects">
+                    <li x-text="m"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <template x-if="(state.migration_plan_rmc.risk_blind_spots??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:#b85450; font-weight:700; margin-bottom:6px;">⚠️ 위험 사각지대</div>
+                <ul class="pain-list">
+                  <template x-for="r in state.migration_plan_rmc.risk_blind_spots">
+                    <li x-text="r"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <template x-if="(state.migration_plan_rmc.dependency_gaps??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:6px;">🔗 의존성·순서 누락</div>
+                <ul class="pain-list">
+                  <template x-for="d in state.migration_plan_rmc.dependency_gaps">
+                    <li x-text="d"></li>
+                  </template>
+                </ul>
+              </div>
+            </template>
+
+            <template x-if="(state.migration_plan_rmc.improvement_suggestions??[]).length>0">
+              <div>
+                <div style="font-size:11.5px; color:var(--accent); font-weight:700; margin-bottom:6px;">💡 계획 개선 제안</div>
+                <ol style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:5px;">
+                  <template x-for="s in state.migration_plan_rmc.improvement_suggestions">
+                    <li style="font-size:12.5px; color:var(--text); line-height:1.6;" x-text="s"></li>
+                  </template>
+                </ol>
+              </div>
+            </template>
+
+          </div>
+        </template>
+      </div>
+    </div>
+
+  </div><!-- /report-panel-body -->
+</aside><!-- /report-panel -->
+
+
 </div><!-- /body -->
 </div><!-- /app -->
 
@@ -1649,9 +2273,12 @@ Windows Server 2012</div>
 <!-- ── Toast ─────────────────────────────────────────────────────────────── -->
 <div class="toast-wrap">
   <template x-for="t in toasts" :key="t.id">
-    <div class="toast" :class="t.type">
+    <div class="toast" :class="t.type" :style="t.type === 'error' ? 'cursor:pointer' : ''"
+         :title="t.type === 'error' ? '클릭하여 닫기' : ''"
+         @click="t.type === 'error' && dismissToast(t.id)">
       <span x-text="t.type === 'error' ? '❌' : '✅'"></span>
       <span x-text="t.msg"></span>
+      <span x-show="t.type === 'error'" style="margin-left:8px;opacity:0.6;font-size:0.8em;">✕</span>
     </div>
   </template>
 </div>
@@ -1696,6 +2323,7 @@ function archpilot() {
       step: 0, system: null, analysis: null, modern: null,
       legacy_mmd: '', legacy_drawio: '', modern_mmd: '', modern_drawio: '',
       migration_plan: '', requirements: '',
+      analysis_rmc: null, design_rationale: null, migration_plan_rmc: null,
     },
 
     // UI 상태
@@ -1704,6 +2332,7 @@ function archpilot() {
     inputText:  '',
     fileName:   '',
     requirements: '',
+    scenario:   null,  // null | 'full_replace' | 'partial' | 'additive'
     dragging:   false,
     loading:    false,
     loadingMsg: '',
@@ -1736,6 +2365,22 @@ function archpilot() {
     // 도움말 모달
     showHelp: false,
     helpTab:  'input',
+
+    // 리포트 패널
+    reportOpen: true,
+    reportWidth: 360,
+    reportSections: {
+      summary:     true,
+      analysis:    false,
+      rmc_analysis:false,
+      diff:        false,
+      rationale:   false,
+      plan:        true,
+      plan_rmc:    false,
+    },
+    _panelResizing: false,
+    _panelResizeStartX: 0,
+    _panelResizeStartW: 360,
 
     // 팬/줌 상태
     zoom:       1,
@@ -1937,6 +2582,7 @@ connections:
         const res = await fetch('/api/state');
         this.state = await res.json();
         this.requirements = this.state.requirements || '';
+        this.scenario     = this.state.scenario || null;
         this.activeStep   = Math.min(this.state.step, 4);
         if (this.state.modern && this.state.system) {
           this.diff    = computeDiff(this.state.system, this.state.modern);
@@ -2456,8 +3102,11 @@ connections:
             });
           }
           else if (d.type === 'done') {
-            this.state.analysis = d.result; this.state.step = 3;
-            this.activeStep = 2; this.infoTab = 'analysis';
+            this.state.analysis = d.result;
+            this.state.analysis_rmc = d.analysis_rmc ?? null;
+            this.state.step = 3;
+            this.activeStep = 2;
+            this._openSectionForStep(2);
             this.toast('success', '분석 완료');
           }
           else if (d.type === 'error') throw new Error(d.msg);
@@ -2474,7 +3123,7 @@ connections:
       try {
         await this.consumeStream(
           '/api/modernize/stream',
-          { requirements: this.requirements },
+          { requirements: this.requirements, scenario: this.scenario || null },
           async (d) => {
             if (d.type === 'progress') { this.progress = d.pct; this.loadingMsg = d.msg; }
             else if (d.type === 'chunk') {
@@ -2484,13 +3133,19 @@ connections:
               });
             }
             else if (d.type === 'done') {
+              if (d.scenario) this.scenario = d.scenario;
               Object.assign(this.state, {
                 modern: d.modern, modern_mmd: d.modern_mmd,
-                modern_drawio: d.modern_drawio, migration_plan: d.migration_plan, step: 4,
+                modern_drawio: d.modern_drawio, migration_plan: d.migration_plan,
+                scenario: d.scenario, step: 4,
+                design_rationale: d.design_rationale ?? null,
+                migration_plan_rmc: d.migration_plan_rmc ?? null,
               });
               this.diff = computeDiff(this.state.system, this.state.modern);
-              this.activeStep = 3; this.diagramTab = 'modern'; this.infoTab = 'diff';
-              this.toast('success', '현대화 설계 완료');
+              this.activeStep = 3; this.diagramTab = 'modern';
+              this._openSectionForStep(3);
+              const scenarioLabel = {full_replace:'전체 교체', partial:'일부 보존', additive:'신규 추가'}[d.scenario] ?? '';
+              this.toast('success', `현대화 설계 완료${scenarioLabel ? ' (' + scenarioLabel + ' 시나리오)' : ''}`);
               this.$nextTick(() => this.renderDiagram());
             }
             else if (d.type === 'error') throw new Error(d.msg);
@@ -2523,8 +3178,71 @@ connections:
     // ── Toast ──────────────────────────────────────────────────────────
     toast(type, msg) {
       const id = Date.now();
-      this.toasts.push({ id, type, msg });
-      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 3500);
+      if (type === 'error') {
+        console.error(`[ArchPilot] ${msg}`);
+        this.toasts.push({ id, type, msg });
+        // 에러는 자동으로 사라지지 않음 — 클릭으로 닫기
+      } else {
+        console.log(`[ArchPilot] ${msg}`);
+        this.toasts.push({ id, type, msg });
+        setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 3500);
+      }
+    },
+    dismissToast(id) {
+      this.toasts = this.toasts.filter(t => t.id !== id);
+    },
+
+    // ── 리포트 패널 ────────────────────────────────────────────────────
+    toggleSection(key, enabled = true) {
+      if (!enabled) return;
+      this.reportSections[key] = !this.reportSections[key];
+    },
+
+    async copySection(key) {
+      const texts = {
+        summary:      () => `시스템 요약\n컴포넌트: ${this.state.system?.components?.length ?? 0}\n연결: ${this.state.system?.connections?.length ?? 0}\n${this.state.analysis?.summary ?? ''}`,
+        analysis:     () => this.state.analysis ? JSON.stringify(this.state.analysis, null, 2) : '',
+        rmc_analysis: () => this.state.analysis_rmc ? JSON.stringify(this.state.analysis_rmc, null, 2) : '',
+        diff:         () => this.diff ? JSON.stringify(this.diff, null, 2) : '',
+        rationale:    () => this.state.design_rationale ? JSON.stringify(this.state.design_rationale, null, 2) : '',
+        plan:         () => this.state.migration_plan ?? '',
+        plan_rmc:     () => this.state.migration_plan_rmc ? JSON.stringify(this.state.migration_plan_rmc, null, 2) : '',
+      };
+      const fn = texts[key];
+      if (!fn) return;
+      const text = fn();
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+      this.toast('success', '클립보드에 복사됐습니다');
+    },
+
+    startPanelResize(e) {
+      this._panelResizing = true;
+      this._panelResizeStartX = e.clientX;
+      this._panelResizeStartW = this.reportWidth;
+      const onMove = (ev) => {
+        if (!this._panelResizing) return;
+        const delta = this._panelResizeStartX - ev.clientX;
+        this.reportWidth = Math.max(220, Math.min(640, this._panelResizeStartW + delta));
+      };
+      const onUp = () => {
+        this._panelResizing = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+
+    // 파이프라인 완료 시 해당 섹션 자동 열기
+    _openSectionForStep(step) {
+      if (step === 2 && this.state.analysis)     { this.reportSections.analysis = true; this.reportSections.summary = true; }
+      if (step === 3 && this.state.modern)        { this.reportSections.diff = true; }
+      if (this.state.design_rationale)            { this.reportSections.rationale = true; }
+      if (this.state.migration_plan)              { this.reportSections.plan = true; }
+      if (this.state.migration_plan_rmc)          { this.reportSections.plan_rmc = true; }
+      if (this.state.analysis_rmc)               { this.reportSections.rmc_analysis = true; }
+      if (!this.reportOpen)                       { this.reportOpen = true; }
     },
   };
 }

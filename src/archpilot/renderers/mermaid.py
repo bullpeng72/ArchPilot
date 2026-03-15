@@ -6,7 +6,7 @@ import re
 from typing import ClassVar
 
 from archpilot.core.models import (
-    ComponentType, Criticality, LifecycleStatus, SystemModel,
+    Component, ComponentType, Criticality, LifecycleStatus, SystemModel,
 )
 from archpilot.renderers.base import BaseRenderer
 
@@ -51,7 +51,7 @@ _LEGACY_PROTO_KEYWORDS  = ("SOAP", "FTP", "CICS", "SNA", "MQ", "CTG", "SFTP")
 _ASYNC_PROTO_KEYWORDS   = ("AMQP", "KAFKA", "SQS", "PUBSUB", "EVENTBRIDGE")
 
 
-def _build_label(c: "SystemModel.components[0]") -> str:  # type: ignore[name-defined]
+def _build_label(c: Component) -> str:
     """노드 레이블 조합: 이름 + 기술스택 + 상태 배지."""
     parts: list[str] = [c.label]
 

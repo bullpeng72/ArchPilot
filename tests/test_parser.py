@@ -50,8 +50,9 @@ connections:
 """
     path = tmp_path / "bad.yaml"
     path.write_text(yaml_content)
-    with pytest.raises(Exception):
-        SystemParser().from_file(path)
+    # 유효하지 않은 connection은 경고 후 무시됨 (예외 없이 빈 connections 반환)
+    model = SystemParser().from_file(path)
+    assert len(model.connections) == 0
 
 
 def test_duplicate_id_raises(tmp_path):

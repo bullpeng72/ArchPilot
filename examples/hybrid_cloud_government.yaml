@@ -1,0 +1,447 @@
+name: Hybrid Cloud Government Digital Service Platform
+description: 2020년 구축된 전자정부 디지털 서비스 플랫폼. 주민 민원·증명서 발급·세금 납부 통합 포털. 행정 데이터는 공공 클라우드(NCP)
+  + 온프레미스 레거시 행정망 연계. 전자서명(공동인증서), 행정전산망 연결, 개인정보 비식별화.
+components:
+- id: citizen_web
+  type: client
+  label: 민원 포털 (웹)
+  tech:
+  - React 18
+  - TypeScript
+  - 공동인증서 PKI
+  host: on-premise
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: citizen_mobile
+  type: client
+  label: 모바일 민원 앱
+  tech:
+  - Flutter 3
+  - Android
+  - iOS
+  - PASS 인증
+  host: on-premise
+  metadata:
+    users: MAU 320만
+  criticality: medium
+  lifecycle_status: active
+  data_classification: public
+- id: gov_employee
+  type: client
+  label: 공무원 업무 단말 (인트라넷)
+  tech:
+  - Windows 10
+  - IE 11 / Edge
+  - ActiveX 전자서명
+  host: on-premise
+  lifecycle_status: deprecated
+  metadata:
+    note: ActiveX 의존성으로 Chrome/Firefox 미지원, Edge 전환 진행 중
+  criticality: medium
+  data_classification: internal
+- id: waf_dmz
+  type: security
+  label: 웹방화벽 (WAF / Anti-DDoS)
+  tech:
+  - 안랩 MDS
+  - Piolink WEBFRONT-K
+  - CC인증 EAL4+
+  host: on-premise
+  metadata:
+    zone: DMZ
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: ssl_vpn
+  type: gateway
+  label: SSL-VPN (공무원 원격 접속)
+  tech:
+  - F5 BIG-IP APM
+  - FIDO2
+  - 공동인증서
+  host: on-premise
+  metadata:
+    zone: DMZ
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: api_gw_dmz
+  type: gateway
+  label: DMZ API 게이트웨이
+  tech:
+  - NGINX 1.25
+  - mTLS
+  - Rate Limit
+  host: on-premise
+  metadata:
+    zone: DMZ
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: ncp_lb
+  type: loadbalancer
+  label: NCP Load Balancer
+  tech:
+  - NCP Load Balancer
+  - SSL Offload
+  host: aws
+  metadata:
+    provider: NCP
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: portal_backend
+  type: server
+  label: 민원 포털 백엔드
+  tech:
+  - Java 17
+  - Spring Boot 3
+  - JBoss EAP 7
+  host: aws
+  metadata:
+    provider: NCP
+  specs:
+    instances: 10
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: auth_svc
+  type: service
+  label: 전자서명 / 인증 서비스
+  tech:
+  - Java 11
+  - 공동인증서 SDK
+  - FIDO2
+  - PASS API
+  host: aws
+  metadata:
+    provider: NCP
+  compliance:
+  - 전자서명법
+  - 개인정보보호법
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: doc_issuance_svc
+  type: service
+  label: 증명서 발급 서비스
+  tech:
+  - Java 17
+  - iText 7 (PDF)
+  - 공문서 디지털 서명
+  host: aws
+  metadata:
+    provider: NCP
+    daily_issuance: 18만 건
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: payment_svc
+  type: service
+  label: 세금·수수료 결제 서비스
+  tech:
+  - Java 17
+  - 전자납부 VAN
+  - 신용카드사 API
+  host: aws
+  metadata:
+    provider: NCP
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: notification_svc
+  type: service
+  label: 민원 알림 서비스 (SMS/카카오)
+  tech:
+  - Node.js 20
+  - KT API
+  - 카카오 알림톡
+  host: aws
+  metadata:
+    provider: NCP
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: ncp_cache
+  type: cache
+  label: NCP Redis (세션·인증 캐시)
+  tech:
+  - NCP Cloud DB for Redis
+  - Redis 7.0
+  host: aws
+  metadata:
+    provider: NCP
+  specs:
+    nodes: 3 Primary + 3 Replica
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: ncp_db
+  type: database
+  label: NCP DB (민원 접수·처리 이력)
+  tech:
+  - NCP Cloud DB for MySQL 8.0
+  - Multi-AZ
+  host: aws
+  metadata:
+    provider: NCP
+  compliance: 개인정보보호법 안전조치
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: ncp_object_storage
+  type: storage
+  label: NCP Object Storage (민원 첨부파일)
+  tech:
+  - NCP Object Storage
+  - S3 호환 API
+  - AES-256
+  host: aws
+  metadata:
+    provider: NCP
+    retention: 10년 (공공기록물법)
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: ncp_nas
+  type: storage
+  label: NCP NAS (증명서 PDF 임시 보관)
+  tech:
+  - NCP NAS
+  - NFS
+  - 암호화 볼륨
+  host: aws
+  metadata:
+    provider: NCP
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: kafka_ncp
+  type: queue
+  label: NCP Kafka (민원 이벤트 버스)
+  tech:
+  - NCP Cloud for Apache Kafka 3.4
+  host: aws
+  metadata:
+    provider: NCP
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: ncp_monitor
+  type: monitoring
+  label: NCP Cloud Insight / Grafana
+  tech:
+  - NCP Cloud Insight
+  - Grafana 10
+  - PagerDuty
+  host: aws
+  metadata:
+    provider: NCP
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: gw_network
+  type: gateway
+  label: 행정망 연계 게이트웨이
+  tech:
+  - 행안부 G/W
+  - 전용선 100Mbps
+  - TLS 국가암호
+  host: on-premise
+  metadata:
+    network: 행정전산망 (분리망)
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: pop_system
+  type: mainframe
+  label: 주민등록 시스템 (POP)
+  tech:
+  - COBOL
+  - CICS
+  - DB2 z/OS
+  host: on-premise
+  metadata:
+    operator: 행정안전부
+  criticality: high
+  lifecycle_status: eol
+  data_classification: restricted
+- id: tax_system
+  type: server
+  label: 지방세 시스템 (ETAX)
+  tech:
+  - Java EE 6
+  - JBoss 4
+  - Oracle 11g
+  host: on-premise
+  metadata:
+    operator: 행정안전부
+  criticality: high
+  lifecycle_status: eol
+  data_classification: confidential
+- id: court_register
+  type: server
+  label: 부동산등기 시스템
+  tech:
+  - C++
+  - Oracle 11g
+  host: on-premise
+  metadata:
+    operator: 대법원
+  criticality: high
+  lifecycle_status: eol
+  data_classification: confidential
+- id: hira_system
+  type: server
+  label: 건강보험 자격조회 (HIRA)
+  tech:
+  - SOAP/XML
+  - ISO 8583
+  host: on-premise
+  metadata:
+    operator: 건강보험심사평가원
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: legacy_db_oracle
+  type: database
+  label: 행정 레거시 DB (Oracle 11g)
+  tech:
+  - Oracle 11g RAC
+  - Data Guard
+  host: on-premise
+  specs:
+    storage: 30TB SAN
+  criticality: high
+  lifecycle_status: eol
+  data_classification: restricted
+- id: legacy_esb
+  type: esb
+  label: 행정정보 공동이용 ESB
+  tech:
+  - Tibco BusinessWorks
+  - SOAP/WSDL
+  - SAML 2.0
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: hsm_gov
+  type: security
+  label: 정부 HSM (공동인증서 CA 연동)
+  tech:
+  - KCMVP 인증 HSM
+  - 공개키 기반구조(PKI)
+  host: on-premise
+  compliance: KCMVP 2등급
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+- id: audit_log_db
+  type: database
+  label: 감사 로그 DB (변경 불가 로그)
+  tech:
+  - Oracle 19c
+  - Audit Vault
+  - WORM
+  host: on-premise
+  metadata:
+    retention: 5년 (행정감사)
+  criticality: high
+  lifecycle_status: active
+  data_classification: restricted
+connections:
+- from: citizen_web
+  to: waf_dmz
+  protocol: HTTPS
+- from: citizen_mobile
+  to: waf_dmz
+  protocol: HTTPS
+- from: gov_employee
+  to: ssl_vpn
+  protocol: SSL-VPN
+- from: waf_dmz
+  to: api_gw_dmz
+  protocol: HTTPS (검증 통과)
+- from: ssl_vpn
+  to: api_gw_dmz
+  protocol: Internal
+- from: api_gw_dmz
+  to: ncp_lb
+  protocol: HTTPS / mTLS
+- from: ncp_lb
+  to: portal_backend
+  protocol: HTTPS
+- from: portal_backend
+  to: auth_svc
+  protocol: gRPC
+- from: portal_backend
+  to: doc_issuance_svc
+  protocol: REST
+- from: portal_backend
+  to: payment_svc
+  protocol: REST
+- from: portal_backend
+  to: ncp_cache
+  protocol: RESP3 (세션)
+- from: portal_backend
+  to: ncp_db
+  protocol: JDBC
+- from: portal_backend
+  to: kafka_ncp
+  protocol: Kafka Producer
+- from: doc_issuance_svc
+  to: ncp_nas
+  protocol: NFS (PDF 임시 저장)
+- from: doc_issuance_svc
+  to: ncp_object_storage
+  protocol: S3 API (장기 보관)
+- from: auth_svc
+  to: hsm_gov
+  protocol: HTTPS (공동인증서 서명 검증)
+- from: kafka_ncp
+  to: notification_svc
+  protocol: Kafka Consumer
+- from: kafka_ncp
+  to: audit_log_db
+  protocol: Kafka → JDBC (감사 로그)
+- from: portal_backend
+  to: gw_network
+  protocol: HTTPS (국가암호 알고리즘 ARIA)
+- from: gw_network
+  to: legacy_esb
+  protocol: SOAP/WSDL (행정정보공동이용)
+- from: legacy_esb
+  to: pop_system
+  protocol: CICS CTG (주민등록 조회)
+- from: legacy_esb
+  to: tax_system
+  protocol: EJB / SOAP (지방세 조회)
+- from: legacy_esb
+  to: court_register
+  protocol: SOAP (부동산등기 조회)
+- from: legacy_esb
+  to: hira_system
+  protocol: ISO 8583 (건강보험 자격)
+- from: legacy_esb
+  to: legacy_db_oracle
+  protocol: JDBC
+- from: pop_system
+  to: legacy_db_oracle
+  protocol: JDBC
+- from: tax_system
+  to: legacy_db_oracle
+  protocol: JDBC
+- from: ncp_monitor
+  to: portal_backend
+  protocol: Cloud Insight Agent
+- from: audit_log_db
+  to: ncp_object_storage
+  protocol: 암호화 아카이브
+domain: government
+vintage: 2020
+compliance:
+- 개인정보보호법
+- 전자서명법
+- 공공기록물법

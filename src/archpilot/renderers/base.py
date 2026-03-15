@@ -8,6 +8,9 @@ from typing import ClassVar
 
 from archpilot.core.models import SystemModel
 
+# CLI 전체에서 공유하는 지원 포맷 목록 — 여기서만 관리
+VALID_FORMATS: frozenset[str] = frozenset({"mermaid", "png", "svg", "drawio"})
+
 
 class BaseRenderer(ABC):
     name: ClassVar[str] = ""
@@ -49,6 +52,9 @@ def get_renderer(fmt: str) -> BaseRenderer:
     return cls()
 
 
+_RENDER_TIMEOUT = 60  # 렌더러 전체 배치 최대 대기 시간 (초)
+
+
 def run_renderers_parallel(
     model: SystemModel,
     formats: list[str],
@@ -65,11 +71,18 @@ def run_renderers_parallel(
             executor.submit(r.save, model, output_dir, filename): fmt
             for fmt, r in renderers
         }
-        for future in concurrent.futures.as_completed(futures):
-            fmt = futures[future]
-            try:
-                results[fmt] = future.result()
-            except Exception as e:
-                results[fmt] = e
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=_RENDER_TIMEOUT):
+                fmt = futures[future]
+                try:
+                    results[fmt] = future.result()
+                except Exception as e:
+                    results[fmt] = e
+        except concurrent.futures.TimeoutError:
+            for future, fmt in futures.items():
+                if fmt not in results:
+                    results[fmt] = TimeoutError(
+                        f"렌더러 '{fmt}': {_RENDER_TIMEOUT}초 초과로 취소됨"
+                    )
 
     return results

@@ -1,4 +1,4 @@
-# ArchPilot — CLAUDE.md `v0.2.1`
+# ArchPilot — CLAUDE.md `v0.2.3`
 
 ## 프로젝트 개요
 
@@ -22,6 +22,7 @@ archpilot/
 │       ├── cli/
 │       │   ├── __init__.py
 │       │   ├── main.py          # Typer app 진입점
+│       │   ├── _utils.py        # CLI 공통 유틸 (progress, error formatting)
 │       │   ├── cmd_init.py      # archpilot init
 │       │   ├── cmd_ingest.py    # archpilot ingest
 │       │   ├── cmd_analyze.py   # archpilot analyze
@@ -37,6 +38,7 @@ archpilot/
 │       ├── llm/
 │       │   ├── client.py        # OpenAI 비동기 클라이언트 래퍼 (스트리밍 지원)
 │       │   ├── prompts.py       # 프롬프트 템플릿 (상수)
+│       │   ├── utils.py         # LLM 관련 상수 (MAX_ANALYZE_TOKENS 등)
 │       │   ├── analyzer.py      # 레거시 시스템 분석
 │       │   ├── modernizer.py    # 현대화 설계 생성
 │       │   └── parser_agent.py  # 자연어 텍스트 → SystemModel
@@ -48,10 +50,17 @@ archpilot/
 │       │   ├── drawio_parser.py # draw.io XML → SystemModel (역방향 파서)
 │       │   └── drawio_library.py# ArchPilot 컴포넌트 라이브러리 파일 생성
 │       ├── ui/
-│       │   ├── server.py        # FastAPI 인터랙티브 UI 서버 (SSE 스트리밍)
-│       │   ├── session.py       # 인메모리 세션 관리
+│       │   ├── server.py        # FastAPI 앱 팩토리 + 페이지/다이어그램 라우트
+│       │   ├── session.py       # 인메모리 세션 관리 (AppSession)
+│       │   ├── helpers.py       # SSE 응답 빌더, 공통 유틸
+│       │   ├── schemas.py       # FastAPI 요청/응답 Pydantic 스키마
+│       │   ├── routers/
+│       │   │   ├── __init__.py
+│       │   │   ├── ingest.py    # POST /api/ingest, /api/ingest/file, /api/ingest/drawio, SSE chat
+│       │   │   ├── analyze.py   # GET  /api/analyze/stream (SSE)
+│       │   │   └── modernize.py # POST /api/modernize/stream (SSE)
 │       │   └── templates/
-│       │       ├── app.html.j2      # 인터랙티브 웹 앱
+│       │       ├── app.html.j2      # 인터랙티브 웹 앱 (우측 아코디언 리포트 패널)
 │       │       └── slides.html.j2   # reveal.js 발표 슬라이드
 │       └── config.py            # pydantic-settings, .env 로드
 ├── tests/
@@ -59,15 +68,23 @@ archpilot/
 │   ├── test_parser.py
 │   ├── test_renderers.py
 │   ├── test_drawio_parser.py
+│   ├── test_drawio_config.py
+│   ├── test_mingrammer.py
+│   ├── test_ui_server.py
 │   └── test_diff.py
 ├── examples/
 │   ├── legacy_ecommerce.yaml
-│   └── legacy_bank.yaml
+│   ├── legacy_bank.yaml
+│   ├── hybrid_cloud_government.yaml
+│   └── hybrid_cloud_manufacturing.yaml
 ├── docs/
-│   ├── SPEC.md                  # 기능 명세
-│   ├── ARCHITECTURE.md          # 내부 아키텍처
-│   ├── ONTOLOGY.md              # 기술 온톨로지 & 입력 표준화 상세
-│   └── USER_GUIDE.md            # 입력 → 발표까지 사용자 가이드
+│   ├── 1_OVERVIEW.md            # ArchPilot 개요, 핵심 개념, 전체 파이프라인
+│   ├── 2_SCHEMA.md              # YAML/JSON 스키마 완전 가이드, 레거시 시스템 작성법
+│   ├── 3_USER_GUIDE.md          # 설치부터 발표까지 단계별 워크플로우
+│   ├── 4_GROUNDING.md           # LLM 지식·그라운딩 체계, 분석→현대화→RMC 파이프라인
+│   ├── 5_DRAWIO.md              # draw.io 통합 완전 가이드
+│   ├── 6_ARCHITECTURE.md        # 내부 아키텍처 (개발자용)
+│   └── 7_SPEC.md                # 기능 명세
 ├── pyproject.toml
 ├── .env.example
 └── README.md
@@ -118,7 +135,7 @@ archpilot ingest <file> [options]     # 레거시 시스템 파일 주입
 archpilot analyze <system.json>       # LLM 분석 보고서 생성
 archpilot modernize <system.json>     # LLM 현대화 설계 생성
 archpilot serve <output_dir>          # 인터랙티브 UI + reveal.js 서버 실행
-archpilot export <system.json>        # system.json → .drawio 파일 내보내기
+archpilot export [output_dir]         # 발표 슬라이드 → 정적 HTML 내보내기 (dist/)
 
 # draw.io Desktop 통합 서브커맨드
 archpilot drawio setup                # draw.io Desktop에 ArchPilot 라이브러리 설치
@@ -147,6 +164,7 @@ archpilot drawio export <system.json> # system.json → .drawio 내보내기
 | `python-multipart` | 파일 업로드 |
 | `tenacity` | LLM 재시도 |
 | `watchdog>=4.0` | draw.io 파일 변경 감시 |
+| `defusedxml>=0.7` | XXE/DTD 보안 XML 파싱 |
 
 ---
 
@@ -205,6 +223,45 @@ output/
 ---
 
 ## 📝 변경 이력
+
+### v0.2.3 (2026-03-15) — UI 리포트 패널 개편 & 대형 시스템 현대화 강화
+
+- ✨ `ui/templates/app.html.j2` — 하단 220px 탭 → 360px 우측 아코디언 패널 전면 개편 (Progressive Reveal, 드래그 리사이즈, 섹션별 클립보드 복사)
+- ✨ `ui/routers/` — APIRouter 분리: ingest, analyze, modernize 라우터 독립 파일로 분리
+- ✨ `ui/helpers.py` / `ui/schemas.py` — 공통 유틸·요청 스키마 분리 신규 생성
+- ✨ `llm/client.py` — `BaseLLMClient` ABC 추가 (LLMClient/AsyncLLMClient 공통 초기화 추상화)
+- ✨ `llm/modernizer.py` — A1 체크리스트 주입: 레거시 컴포넌트 전체 목록을 프롬프트에 명시적 삽입
+- ✨ `llm/modernizer.py` — A2 재시도 루프: 현대화 후 누락 컴포넌트 검증, 자동 재시도 (`_MAX_RETRY=1`)
+- ✨ `llm/modernizer.py` — A3 2단계 분할: 20개 초과 대형 시스템에 Skeleton→Enrich 2-phase 자동 적용
+- ✨ `llm/prompts.py` — `MODERNIZE_SKELETON_PROMPT` 신규: Phase 1 스켈레톤 전용 경량 프롬프트
+- ✨ `llm/utils.py` — `LARGE_SYSTEM_THRESHOLD=20`, `MAX_SKELETON_TOKENS=4000` 상수 추가
+- ✨ `ui/routers/modernize.py` — SSE 스트리밍에 A1/A2/A3 전략 통합
+- 🔧 `renderers/drawio_parser.py` — defusedxml XXE/DTD 보안 패치
+- 🔧 `llm/modernizer.py` — `MAX_PLAN_TOKENS` 상수 적용 (하드코딩 제거)
+- 🔧 `core/drawio_config.py` — `except` 범위 축소, CRC32C magic number 주석 추가
+- 🔧 `ui/routers/ingest.py` — `asyncio.to_thread()` 로 동기 파서 호출 비동기 처리
+- 📝 `examples/` — 8개 예제 YAML 전수 검증·교정: 스키마 필드 위치, 컴포넌트 타입, 호스트 타입, lifecycle_status, 엔터프라이즈 필드
+- ✅ `tests/test_mingrammer.py` — 22 테스트 신규 (safe_var, resolve_class, build_imports)
+- ✅ `tests/test_drawio_config.py` — 20 테스트 신규 (varint, CRC32C, LDB record)
+- ✅ `tests/test_ui_server.py` — 23 테스트 신규 (page routes, ingest, state API)
+- ✅ `tests/test_llm_utils.py` — 17 테스트 신규 (compress_system_dict 3단계·compress_model·compress_analysis 3단계·compress_for_plan 4단계)
+- ✅ `tests/test_modernizer.py` — 21 테스트 신규 (resolve_scenario, checklist, check_missing, A3 임계값 라우팅, A2 재시도, A3 2단계) — 총 181개 통과
+
+### v0.2.2 (2026-03-14) — 시나리오 기반 현대화 & 버그 수정
+
+- ✨ `core/models.py` — `ModernizationAction` (6R enum), `ModernizationScenario` (full_replace/partial/additive) 신규
+- ✨ `core/models.py` — `ComponentDecision`, `QualityDimension`, `ArchitectureQuality` 모델 신규
+- ✨ `core/models.py` — `AnalysisResult`에 `recommended_scenario`, `scenario_rationale`, `component_decisions`, `legacy_quality` 필드 추가
+- ✨ `core/models.py` — `DiffResult`에 `inferred_scenario`, `modern_quality` 필드 추가
+- ✨ `llm/prompts.py` — `ANALYZE_SYSTEM_PROMPT`에 시나리오 권고·컴포넌트 전략(6R)·5차원 품질 평가 섹션 추가
+- ✨ `llm/prompts.py` — `MODERNIZE_SYSTEM_PROMPT`에 시나리오별 설계 원칙 추가 (full_replace/partial/additive 분기)
+- ✨ `llm/modernizer.py` — `modernize()`에 `scenario` 파라미터 추가, 분석 결과 `component_decisions` 강조 전달
+- ✨ `ui/session.py` — `AppSession`에 `scenario` 필드 + `reset_modernization()` 메서드 추가
+- ✨ `ui/server.py` — `ModernizeRequest`에 `scenario` 필드 추가, 시나리오 컨텍스트 LLM 전달
+- ✨ `ui/templates/app.html.j2` — 시나리오 선택 드롭다운, 권고 시나리오 배지, 레거시 품질 5차원 바 차트, 컴포넌트 전략 테이블 UI 추가
+- 🐛 `ui/server.py` — `analyze_stream` `max_tokens` 누락 버그 수정 (`MAX_ANALYZE_TOKENS=6000`)
+- 🐛 `ui/server.py` — 마이그레이션 플랜 `max_tokens` 누락 버그 수정 (`MAX_PLAN_TOKENS=6000`)
+- 🔧 `llm/utils.py` — `MAX_ANALYZE_TOKENS`, `MAX_PLAN_TOKENS` 상수 추가
 
 ### v0.2.1 (2026-03-13) — 실행 위치 독립성 개선
 

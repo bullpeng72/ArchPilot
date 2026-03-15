@@ -9,10 +9,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from archpilot.core.models import AnalysisResult, SystemModel
+from archpilot.cli._utils import load_system_model
+from archpilot.core.models import AnalysisResult
+from archpilot.renderers.base import VALID_FORMATS
 
 console = Console()
-VALID_FORMATS = {"mermaid", "png", "svg", "drawio"}
 
 
 def modernize(
@@ -40,11 +41,7 @@ def modernize(
     modern_dir = output_dir / "modern"
     modern_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        legacy = SystemModel.model_validate_json(system_json.read_text())
-    except Exception as e:
-        console.print(f"[red]system.json 로드 실패: {e}[/red]", err=True)
-        raise typer.Exit(1)
+    legacy = load_system_model(system_json)
 
     analysis: AnalysisResult | None = None
     if not no_analysis:
@@ -53,8 +50,8 @@ def modernize(
             try:
                 analysis = AnalysisResult.model_validate_json(analysis_path.read_text())
                 console.print(f"[dim]분석 결과 참조: {analysis_path}[/dim]")
-            except Exception:
-                pass
+            except Exception as e:
+                console.print(f"[yellow]⚠ analysis.json 로드 실패 (무시됨): {e}[/yellow]")
 
     console.print(f"\n[bold]⚙️  현대화 설계 생성 중:[/bold] {legacy.name}")
     console.print(f"[dim]요구사항: {requirements}[/dim]")

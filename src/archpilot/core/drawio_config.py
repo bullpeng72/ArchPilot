@@ -228,8 +228,8 @@ def _read_varint(data: bytes, offset: int) -> tuple[int, int]:
     while True:
         b = data[offset]
         offset += 1
-        result |= (b & 0x7F) << shift
-        if not (b & 0x80):
+        result |= (b & 0x7F) << shift  # 0x7F = 0b01111111: lower 7-bit payload mask
+        if not (b & 0x80):             # 0x80 = 0b10000000: MSB continuation bit
             break
         shift += 7
     return result, offset
@@ -237,23 +237,31 @@ def _read_varint(data: bytes, offset: int) -> tuple[int, int]:
 
 def _write_varint(n: int) -> bytes:
     result = b""
-    while n >= 0x80:
-        result += bytes([0x80 | (n & 0x7F)])
+    while n >= 0x80:                           # values < 128 fit in a single byte
+        result += bytes([0x80 | (n & 0x7F)])   # 0x80: set continuation bit; 0x7F: 7-bit payload
         n >>= 7
     return result + bytes([n])
 
 
-def _crc32c(data: bytes) -> int:
-    """CRC32C (Castagnoli) 순수 Python 구현."""
+def _make_crc32c_table() -> list[int]:
     table = []
     for i in range(256):
         crc = i
         for _ in range(8):
+            # 0x82F63B78: CRC32C (Castagnoli) polynomial in bit-reversed form
             crc = (crc >> 1) ^ 0x82F63B78 if crc & 1 else crc >> 1
         table.append(crc)
+    return table
+
+
+_CRC32C_TABLE: list[int] = _make_crc32c_table()
+
+
+def _crc32c(data: bytes) -> int:
+    """CRC32C (Castagnoli) 순수 Python 구현."""
     crc = 0xFFFFFFFF
     for b in data:
-        crc = table[(crc ^ b) & 0xFF] ^ (crc >> 8)
+        crc = _CRC32C_TABLE[(crc ^ b) & 0xFF] ^ (crc >> 8)
     return crc ^ 0xFFFFFFFF
 
 
@@ -300,7 +308,7 @@ def _read_drawio_config_from_ldb(data: bytes) -> tuple[Optional[dict], int]:
                     try:
                         last_config = json.loads(value[1:].decode("utf-8"))
                         last_seq = seq
-                    except Exception:
+                    except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
             elif ktype == 0:  # DELETE
                 if key == key_target:

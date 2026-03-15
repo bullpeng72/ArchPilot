@@ -1,0 +1,290 @@
+name: Hybrid Cloud Manufacturing MES
+description: 2018년 구축된 제조 실행 시스템 (MES). 공장 내 온프레미스 OT망과 Azure 클라우드를 VPN으로 연결한 하이브리드
+  구조. ERP·SCM은 클라우드, 생산 제어·SCADA는 내부망에 격리.
+components:
+- id: scada
+  type: server
+  label: SCADA 서버
+  tech:
+  - Wonderware InTouch
+  - OPC-UA
+  - Windows Server 2016
+  host: on-premise
+  criticality: high
+  metadata:
+    zone: OT
+  specs:
+    cpu: 8
+    memory: 32GB
+  lifecycle_status: active
+  data_classification: confidential
+- id: plc_line1
+  type: server
+  label: PLC 제어기 (라인 1)
+  tech:
+  - Siemens S7-1500
+  - PROFINET
+  host: on-premise
+  lifecycle_status: active
+  criticality: high
+  metadata:
+    zone: OT
+  data_classification: internal
+- id: plc_line2
+  type: server
+  label: PLC 제어기 (라인 2)
+  tech:
+  - Siemens S7-1500
+  - PROFINET
+  host: on-premise
+  metadata:
+    zone: OT
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: mes_app
+  type: server
+  label: MES 애플리케이션 서버
+  tech:
+  - C# .NET 4.8
+  - WCF
+  - Windows Server 2019
+  host: on-premise
+  specs:
+    cpu: 16
+    memory: 64GB
+  criticality: high
+  lifecycle_status: deprecated
+  data_classification: confidential
+- id: mes_db
+  type: database
+  label: MES 운영 DB (SQL Server)
+  tech:
+  - SQL Server 2017
+  - Always On AG
+  host: on-premise
+  specs:
+    cpu: 16
+    memory: 128GB
+    storage: 10TB SAN
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: historian
+  type: database
+  label: 공정 이력 DB (Historian)
+  tech:
+  - OSIsoft PI System
+  - InfluxDB 1.8
+  host: on-premise
+  metadata:
+    retention: 10년
+  specs:
+    storage: 50TB
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: dmz_gateway
+  type: security
+  label: DMZ 방화벽 (OT↔IT 경계)
+  tech:
+  - Palo Alto Firewall
+  - Fortinet
+  host: on-premise
+  metadata:
+    zone: DMZ
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: erp_onprem
+  type: server
+  label: ERP 연계 서버 (SAP RFC)
+  tech:
+  - SAP RFC SDK
+  - Java 8
+  - JBoss EAP
+  host: on-premise
+  criticality: high
+  lifecycle_status: deprecated
+  data_classification: confidential
+- id: vpn_gw
+  type: gateway
+  label: Site-to-Site VPN 게이트웨이
+  tech:
+  - Cisco ASA
+  - IPSec IKEv2
+  host: on-premise
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: az_vpn
+  type: gateway
+  label: Azure VPN Gateway
+  tech:
+  - Azure VPN Gateway
+  - BGP
+  host: azure
+  criticality: high
+  lifecycle_status: active
+  data_classification: internal
+- id: az_apim
+  type: gateway
+  label: Azure API Management
+  tech:
+  - Azure APIM
+  - OAuth 2.0
+  - OpenAPI
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: erp_sap
+  type: server
+  label: SAP S/4HANA (ERP)
+  tech:
+  - SAP S/4HANA 2021
+  - ABAP
+  - HANA DB
+  host: azure
+  specs:
+    tier: Premium
+  criticality: high
+  lifecycle_status: active
+  data_classification: confidential
+- id: scm_app
+  type: server
+  label: SCM / 공급망 관리
+  tech:
+  - SAP IBP
+  - Python 3.9
+  - Azure App Service
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_blob
+  type: storage
+  label: Azure Blob Storage (공정 데이터)
+  tech:
+  - Azure Blob Storage
+  - ADLS Gen2
+  host: azure
+  metadata:
+    tier: Hot/Cool/Archive 계층화
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_event_hub
+  type: queue
+  label: Azure Event Hubs (IoT 스트림)
+  tech:
+  - Azure Event Hubs
+  - Apache Kafka 2.6
+  host: azure
+  specs:
+    throughput_units: 20
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: az_stream
+  type: service
+  label: Azure Stream Analytics
+  tech:
+  - Azure Stream Analytics
+  - SQL-like DSL
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: internal
+- id: az_synapse
+  type: database
+  label: Azure Synapse Analytics (DW)
+  tech:
+  - Azure Synapse
+  - Apache Spark 3.2
+  - T-SQL
+  host: azure
+  criticality: medium
+  lifecycle_status: active
+  data_classification: confidential
+- id: az_powerbi
+  type: client
+  label: Power BI (생산 KPI 대시보드)
+  tech:
+  - Power BI Premium
+  - DAX
+  host: azure
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+- id: az_monitor
+  type: monitoring
+  label: Azure Monitor / Log Analytics
+  tech:
+  - Azure Monitor
+  - Grafana
+  - KQL
+  host: azure
+  criticality: low
+  lifecycle_status: active
+  data_classification: internal
+connections:
+- from: plc_line1
+  to: scada
+  protocol: OPC-UA
+- from: plc_line2
+  to: scada
+  protocol: OPC-UA
+- from: scada
+  to: historian
+  protocol: OPC-HDA
+- from: scada
+  to: mes_app
+  protocol: OPC-DA / REST
+- from: mes_app
+  to: mes_db
+  protocol: JDBC
+- from: mes_app
+  to: dmz_gateway
+  protocol: HTTPS
+- from: historian
+  to: dmz_gateway
+  protocol: HTTPS/REST
+- from: dmz_gateway
+  to: erp_onprem
+  protocol: SAP RFC
+- from: dmz_gateway
+  to: az_event_hub
+  protocol: HTTPS/AMQP
+- from: vpn_gw
+  to: az_vpn
+  protocol: IPSec/BGP
+- from: erp_onprem
+  to: vpn_gw
+  protocol: Internal
+- from: az_vpn
+  to: az_apim
+  protocol: HTTPS
+- from: az_apim
+  to: erp_sap
+  protocol: HTTPS/OData
+- from: az_apim
+  to: scm_app
+  protocol: REST
+- from: az_event_hub
+  to: az_stream
+  protocol: Event Hubs SDK
+- from: az_stream
+  to: az_synapse
+  protocol: Azure Connector
+- from: az_stream
+  to: az_blob
+  protocol: Azure Connector
+- from: az_synapse
+  to: az_powerbi
+  protocol: DirectQuery
+- from: az_monitor
+  to: az_powerbi
+  protocol: REST
+domain: manufacturing
+vintage: 2018

@@ -1,7 +1,7 @@
 # ArchPilot — 내부 아키텍처
 
-버전: 0.2.1
-최종 수정: 2026-03-13
+버전: 0.2.3
+최종 수정: 2026-03-15
 
 ---
 
@@ -190,7 +190,12 @@ class LLMClient:
 
 ```
 llm/analyzer.py      → LLMClient.chat_stream(ANALYZE_SYSTEM_PROMPT, system_json)
-llm/modernizer.py    → LLMClient.chat_stream(MODERNIZE_SYSTEM_PROMPT, payload)
+llm/modernizer.py    → SystemModernizer.modernize()
+  ├─ ≤20 컴포넌트: _modernize_single_pass()  [A1 체크리스트 + A2 재시도]
+  │     LLMClient.chat_json(MODERNIZE_SYSTEM_PROMPT, user_msg_with_checklist)
+  └─ >20 컴포넌트: _modernize_two_phase()    [A3 2단계 분할]
+        Phase 1: LLMClient.chat_json(MODERNIZE_SKELETON_PROMPT, skeleton_msg)
+        Phase 2: LLMClient.chat_json(MODERNIZE_SYSTEM_PROMPT,  enrich_msg)
 llm/parser_agent.py  → LLMClient.chat(PARSE_SYSTEM_PROMPT, user_text)
 ```
 
@@ -248,14 +253,22 @@ def parse_drawio_xml(xml: str) -> SystemModel:
 
 | style 키워드 | ComponentType |
 |---|---|
-| `shape=mxgraph.aws4.*` | SERVICE / DATABASE / CACHE 등 |
-| `swimlane` | (그룹/호스트 컨테이너) |
-| `cylinder` | DATABASE |
-| `rhombus` | QUEUE |
-| `#ccccff` (파란보라 배경) | MAINFRAME |
-| `arcSize=30` + `#f0d0ff` (보라 배경) | ESB |
-| `flowchart.decision` 또는 `shape=rhombus` | SECURITY |
-| `#fffacd` (밝은노랑 배경) | MONITORING |
+| `aws4.aurora`, `aws4.rds`, `cylinder`, `flowchart.database`, `disk_storage` | DATABASE |
+| `aws4.s3`, `aws4.glacier`, `flowchart.stored_data`, `cisco.servers` | STORAGE |
+| `aws4.sqs`, `aws4.mq`, `flowchart.delay`, `bpmn` | QUEUE |
+| `aws4.elasticache`, `aws4.redis` | CACHE |
+| `aws4.cloudfront` | CDN |
+| `aws4.api_gateway` | GATEWAY |
+| `aws4.elb`, `aws4.alb`, `rhombus` | LOADBALANCER |
+| `flowchart.decision` | SECURITY |
+| `flowchart.terminator`, `cisco.computers`, `peripherals.pc` | CLIENT |
+| `swimlane` | (그룹/호스트 컨테이너, HostType 추론에 사용) |
+| `arcsize=50` + `#e1d5e7` (연보라) | GATEWAY |
+| `arcsize=30` + `#f0d0ff` (보라) | ESB |
+| `#ccccff` (남보라) | MAINFRAME |
+| `#fffacd` (연노랑) | MONITORING |
+| ellipse + `#fff2cc`/`#d6b656` | CACHE |
+| ellipse + `#d5e8d4`/`#82b366` | CDN |
 
 ---
 
@@ -330,33 +343,45 @@ reveal.js 슬라이드의 "Before/After 비교표"에 사용.
 
 ---
 
-### 2.11 `ui/server.py` — FastAPI 인터랙티브 서버
+### 2.11 `ui/server.py` + `ui/routers/` — FastAPI 인터랙티브 서버
+
+v0.2.3부터 API 라우터를 독립 파일로 분리. `server.py`는 앱 팩토리 + 페이지/다이어그램 엔드포인트만 담당.
+
+```
+ui/server.py          → FastAPI 앱 팩토리, GET / , GET /slides, GET|DELETE /api/state,
+                        GET /api/diagram/{step}
+ui/routers/ingest.py  → POST /api/ingest, /api/ingest/file, /api/ingest/drawio,
+                        POST /api/chat/ingest/stream (SSE)
+ui/routers/analyze.py → GET  /api/analyze/stream (SSE)
+ui/routers/modernize.py → POST /api/modernize/stream (SSE)
+ui/helpers.py         → SSE 응답 빌더 (sse_event), 공통 유틸
+ui/schemas.py         → 요청 Pydantic 스키마 (IngestRequest, ModernizeRequest 등)
+```
 
 ```
 archpilot serve output/
   ↓
-1. FastAPI 앱 초기화 (uvicorn)
-2. 세션 상태 관리 (ui/session.py, 인메모리)
-3. Jinja2 → app.html.j2 / slides.html.j2 렌더링
-4. SSE 스트리밍 (분석·현대화 결과 실시간 전달)
-5. 브라우저 자동 오픈 (webbrowser.open)
+1. create_app() — FastAPI 앱 초기화, 라우터 3개 등록
+2. output_dir → app.state.output_dir 저장
+3. uvicorn 실행 (브라우저 자동 오픈)
+4. SSE 스트리밍으로 분석·현대화 결과 실시간 전달
 ```
 
 #### 주요 API 엔드포인트
 
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/` | 인터랙티브 웹 앱 |
-| GET | `/slides` | reveal.js 발표 슬라이드 |
-| GET | `/api/state` | 현재 세션 상태 조회 |
-| DELETE | `/api/state` | 세션 초기화 |
-| POST | `/api/ingest` | YAML/JSON/텍스트 주입 |
-| POST | `/api/ingest/file` | 파일 업로드 주입 |
-| POST | `/api/ingest/drawio` | draw.io XML 주입 |
-| POST | `/api/chat/ingest/stream` | 대화형 시스템 입력 (SSE) |
-| GET | `/api/analyze/stream` | LLM 분석 스트리밍 (SSE) |
-| POST | `/api/modernize/stream` | LLM 현대화 설계 스트리밍 (SSE) |
-| GET | `/api/diagram/{step}` | 다이어그램 다운로드 (mermaid/drawio) |
+| 메서드 | 경로 | 담당 파일 | 설명 |
+|--------|------|-----------|------|
+| GET | `/` | server.py | 인터랙티브 웹 앱 |
+| GET | `/slides` | server.py | reveal.js 발표 슬라이드 |
+| GET | `/api/state` | server.py | 현재 세션 상태 조회 |
+| DELETE | `/api/state` | server.py | 세션 초기화 |
+| GET | `/api/diagram/{step}` | server.py | 다이어그램 다운로드 (mermaid/drawio) |
+| POST | `/api/ingest` | routers/ingest.py | YAML/JSON/텍스트 주입 |
+| POST | `/api/ingest/file` | routers/ingest.py | 파일 업로드 주입 |
+| POST | `/api/ingest/drawio` | routers/ingest.py | draw.io XML 주입 |
+| POST | `/api/chat/ingest/stream` | routers/ingest.py | 대화형 시스템 입력 (SSE) |
+| GET | `/api/analyze/stream` | routers/analyze.py | LLM 분석 스트리밍 (SSE) |
+| POST | `/api/modernize/stream` | routers/modernize.py | LLM 현대화 설계 스트리밍 (SSE) |
 
 #### SSE 스트리밍 데이터 흐름
 
@@ -373,17 +398,29 @@ archpilot serve output/
 ### 2.12 `ui/session.py` — 인메모리 세션 관리
 
 ```python
-class Session(BaseModel):
-    system_model: SystemModel | None = None
-    analysis_result: AnalysisResult | None = None
-    modern_model: SystemModel | None = None
+@dataclass
+class AppSession:
+    system: dict | None = None          # 파싱된 SystemModel (dict)
+    analysis: dict | None = None        # LLM 분석 결과 (dict)
+    modern: dict | None = None          # 현대화 SystemModel (dict)
+    legacy_mmd: str = ""                # 레거시 Mermaid DSL
+    legacy_drawio: str = ""             # 레거시 draw.io XML
+    modern_mmd: str = ""
+    modern_drawio: str = ""
     requirements: str = ""
+    migration_plan: str = ""
+    scenario: str | None = None         # full_replace | partial | additive
+    analysis_rmc: dict | None = None
+    design_rationale: dict | None = None
+    migration_plan_rmc: dict | None = None
 
-_session = Session()
+    def reset_modernization(self) -> None: ...   # 분석·현대화 결과 초기화
+    def to_dict(self) -> dict: ...               # /api/state 응답용
 
-def get_session() -> Session: ...
-def update_session(**kwargs) -> None: ...
-def reset_session() -> None: ...
+_session = AppSession()  # 싱글턴
+
+def get() -> AppSession: ...
+def reset() -> None: ...
 ```
 
 단일 사용자 로컬 CLI 도구이므로 싱글턴 인메모리 세션으로 충분.

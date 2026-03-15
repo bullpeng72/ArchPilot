@@ -12,10 +12,9 @@ from rich.table import Table
 from archpilot.config import settings
 from archpilot.core.models import Criticality, LifecycleStatus
 from archpilot.core.parser import ParseError, SystemParser
-from archpilot.renderers.base import run_renderers_parallel
+from archpilot.renderers.base import VALID_FORMATS, run_renderers_parallel
 
 console = Console()
-VALID_FORMATS = {"mermaid", "png", "svg", "drawio"}
 
 
 def ingest(

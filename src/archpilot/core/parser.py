@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import yaml
 
@@ -95,6 +98,20 @@ class SystemParser:
         raw_comps = [enrich_component(dict(c)) for c in data["components"]]
         components = [self._parse_component(c) for c in raw_comps]
         connections = [self._parse_connection(c) for c in data.get("connections", [])]
+
+        # LLM 생성 모델에서 존재하지 않는 컴포넌트를 참조하는 connection을 제거
+        valid_ids = {c.id for c in components}
+        filtered: list[Connection] = []
+        for conn in connections:
+            if conn.from_id not in valid_ids or conn.to_id not in valid_ids:
+                logger.warning(
+                    "connection 무시 (존재하지 않는 컴포넌트 참조): %s → %s",
+                    conn.from_id,
+                    conn.to_id,
+                )
+            else:
+                filtered.append(conn)
+        connections = filtered
 
         # domain / vintage / scale / compliance / known_issues 등
         # 표준 스키마에 없는 최상위 키를 metadata에 병합

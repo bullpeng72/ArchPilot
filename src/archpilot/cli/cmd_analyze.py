@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from archpilot.core.models import SystemModel
+from archpilot.cli._utils import load_system_model
 
 console = Console()
 
@@ -18,6 +18,7 @@ console = Console()
 def analyze(
     system_json: Annotated[Path, typer.Argument(help="system.json 경로")],
     output: Annotated[Path | None, typer.Option("--output", "-o", help="분석 결과 저장 디렉토리 (기본: system.json 위치)")] = None,
+    requirements: Annotated[str, typer.Option("--requirements", "-r", help="현대화 목표 (분석 시 component_decisions에 반영)")] = "",
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="문제점·기술부채·현대화 기회 전체 목록 출력")] = False,
 ) -> None:
     """system.json을 읽어 LLM 분석 보고서를 생성합니다."""
@@ -28,17 +29,13 @@ def analyze(
     output_dir = output or system_json.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        model = SystemModel.model_validate_json(system_json.read_text())
-    except Exception as e:
-        console.print(f"[red]system.json 로드 실패: {e}[/red]", err=True)
-        raise typer.Exit(1)
+    model = load_system_model(system_json)
 
     console.print(f"\n[bold]🔍 분석 중:[/bold] {model.name}")
 
     from archpilot.llm.analyzer import SystemAnalyzer
     try:
-        result = SystemAnalyzer().analyze(model)
+        result = SystemAnalyzer().analyze(model, requirements=requirements)
     except Exception as e:
         console.print(f"[red]분석 실패: {e}[/red]", err=True)
         raise typer.Exit(1)

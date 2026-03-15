@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import textwrap
 from pathlib import Path
 from typing import ClassVar
@@ -74,6 +75,18 @@ ICON_TABLE: list[tuple[tuple[str, str, str], str]] = [
 ]
 
 
+def _safe_var(component_id: str) -> str:
+    """컴포넌트 ID를 exec() 안전한 Python 변수명으로 변환.
+
+    사용자 YAML/draw.io에서 유입된 ID가 생성 코드에 그대로 삽입되는
+    코드 인젝션을 방지한다. 영숫자·밑줄 외 모든 문자를 '_'로 치환.
+    """
+    sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", component_id)
+    if sanitized and sanitized[0].isdigit():
+        sanitized = f"c_{sanitized}"
+    return sanitized or "comp"
+
+
 def _resolve_class(component: Component) -> str:
     tech_lower = " ".join(component.tech).lower()
     ctype = component.type.value
@@ -127,6 +140,9 @@ class MingrammerRenderer(BaseRenderer):
         imports = _build_imports(model.components)
         groups = model.components_by_host()
 
+        # 컴포넌트 ID → 안전한 Python 변수명 매핑 (exec 코드 인젝션 방지)
+        id_to_var: dict[str, str] = {c.id: _safe_var(c.id) for c in model.components}
+
         node_lines: list[str] = []
         edge_lines: list[str] = []
         indent = "    "
@@ -145,16 +161,19 @@ class MingrammerRenderer(BaseRenderer):
 
             for c in components:
                 cls = _resolve_class(c).rsplit(".", 1)[-1]
-                safe_label = c.label.replace('"', "'")
-                node_lines.append(f'{inner}{c.id} = {cls}("{safe_label}")')
+                safe_label = c.label.replace('"', "'").replace("\\", "")
+                var = id_to_var[c.id]
+                node_lines.append(f'{inner}{var} = {cls}("{safe_label}")')
 
         for conn in model.connections:
-            proto = conn.protocol or ""
+            proto = (conn.protocol or "").replace('"', "'").replace("\\", "")
             if proto and proto != "HTTP":
                 edge = f'Edge(label="{proto}")'
             else:
                 edge = "Edge()"
-            edge_lines.append(f"{indent}{conn.from_id} >> {edge} >> {conn.to_id}")
+            src = id_to_var.get(conn.from_id, _safe_var(conn.from_id))
+            tgt = id_to_var.get(conn.to_id, _safe_var(conn.to_id))
+            edge_lines.append(f"{indent}{src} >> {edge} >> {tgt}")
 
         safe_name = model.name.replace('"', "'")
         code = textwrap.dedent(f"""\
