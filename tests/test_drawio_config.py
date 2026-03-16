@@ -2,10 +2,12 @@
 
 import json
 import struct
+from pathlib import Path
 
 import pytest
 
 from archpilot.core.drawio_config import (
+    _DEFAULT_LIBRARIES,
     _crc32c,
     _make_ldb_record,
     _mask_crc32c,
@@ -13,6 +15,7 @@ from archpilot.core.drawio_config import (
     _read_varint,
     _write_varint,
     find_drawio_config_path,
+    remove_custom_library,
 )
 
 
@@ -138,3 +141,89 @@ class TestFindDrawioConfigPath:
     def test_filename_is_config_json(self):
         result = find_drawio_config_path()
         assert result.name == "config.json"
+
+
+# ── remove_custom_library ────────────────────────────────────────────────────
+
+class TestRemoveCustomLibrary:
+    def _make_ldb_dir(self, tmp_path: Path, config: dict, seq: int = 1) -> Path:
+        """임시 LevelDB 디렉토리와 .log 파일을 생성한다."""
+        ldb_dir = tmp_path / "leveldb"
+        ldb_dir.mkdir()
+        record = _make_ldb_record(config, seq_num=seq)
+        (ldb_dir / "000001.log").write_bytes(record)
+        return ldb_dir
+
+    def test_removes_archpilot_entry(self, tmp_path, monkeypatch):
+        config = {
+            "customLibraries": ["S%2Fhome%2Fuser%2F.archpilot%2Farchpilot-library.drawio.xml", "L.scratchpad"],
+            "libraries": "",
+        }
+        ldb_dir = self._make_ldb_dir(tmp_path, config)
+        monkeypatch.setattr(
+            "archpilot.core.drawio_config.find_drawio_localstorage_path",
+            lambda: ldb_dir,
+        )
+
+        result = remove_custom_library()
+        assert result is True
+
+        data = (ldb_dir / "000001.log").read_bytes()
+        parsed, _ = _read_drawio_config_from_ldb(data)
+        assert parsed is not None
+        assert not any("archpilot" in e.lower() for e in parsed["customLibraries"])
+        assert "L.scratchpad" in parsed["customLibraries"]
+
+    def test_restores_default_libraries(self, tmp_path, monkeypatch):
+        config = {"customLibraries": ["S%2Farchpilot.xml"], "libraries": ""}
+        ldb_dir = self._make_ldb_dir(tmp_path, config)
+        monkeypatch.setattr(
+            "archpilot.core.drawio_config.find_drawio_localstorage_path",
+            lambda: ldb_dir,
+        )
+
+        remove_custom_library()
+        data = (ldb_dir / "000001.log").read_bytes()
+        parsed, _ = _read_drawio_config_from_ldb(data)
+        assert parsed["libraries"] == _DEFAULT_LIBRARIES
+
+    def test_no_op_when_already_clean(self, tmp_path, monkeypatch):
+        config = {"customLibraries": ["L.scratchpad"], "libraries": _DEFAULT_LIBRARIES}
+        ldb_dir = self._make_ldb_dir(tmp_path, config, seq=5)
+        monkeypatch.setattr(
+            "archpilot.core.drawio_config.find_drawio_localstorage_path",
+            lambda: ldb_dir,
+        )
+
+        result = remove_custom_library()
+        assert result is True
+        # 이미 깨끗한 상태이므로 새 레코드를 쓰지 않아야 함 — log 크기 동일
+        original_size = len(_make_ldb_record(config, seq_num=5))
+        assert (ldb_dir / "000001.log").stat().st_size == original_size
+
+    def test_returns_true_when_no_config(self, tmp_path, monkeypatch):
+        """LDB에 .drawio-config가 없어도 True를 반환한다."""
+        ldb_dir = tmp_path / "leveldb"
+        ldb_dir.mkdir()
+        (ldb_dir / "000001.log").write_bytes(b"")
+        monkeypatch.setattr(
+            "archpilot.core.drawio_config.find_drawio_localstorage_path",
+            lambda: ldb_dir,
+        )
+        assert remove_custom_library() is True
+
+    def test_returns_false_when_no_ldb(self, monkeypatch):
+        monkeypatch.setattr(
+            "archpilot.core.drawio_config.find_drawio_localstorage_path",
+            lambda: None,
+        )
+        assert remove_custom_library() is False
+
+    def test_returns_false_when_no_log_files(self, tmp_path, monkeypatch):
+        ldb_dir = tmp_path / "leveldb"
+        ldb_dir.mkdir()
+        monkeypatch.setattr(
+            "archpilot.core.drawio_config.find_drawio_localstorage_path",
+            lambda: ldb_dir,
+        )
+        assert remove_custom_library() is False

@@ -2,7 +2,7 @@
 
 > AI 분석과 현대화 설계의 품질이 결정되는 원리
 
-**Version**: 0.2.4 | **Last Updated**: 2026-03-15
+**Version**: 0.2.5 | **Last Updated**: 2026-03-16
 
 ---
 
@@ -20,6 +20,7 @@
 10. [DX 패턴 16개 상세](#10-dx-패턴-16개-상세)
 11. [AX 패턴 11개 상세](#11-ax-패턴-11개-상세)
 12. [8대 아키텍처 관점 — 멀티 퍼스펙티브](#12-8대-아키텍처-관점--멀티-퍼스펙티브)
+13. [기술 온톨로지 — 입력 자동 보강](#13-기술-온톨로지--입력-자동-보강)
 
 ---
 
@@ -1121,3 +1122,260 @@ modernize 완료 후 추가로 **현대화된 설계를 8대 관점에서 재검
 **활용**: 현대화 설계에서 놓친 관점(예: 비용 초과, 거버넌스 갭)을 사전에 발견하고 `design_rationale.json`에 반영합니다.
 
 > **팀 협업 활용**: `priority_actions`는 스프린트 계획의 우선순위 입력으로, `conflict_areas`는 아키텍처 의사결정 회의의 의제로 활용하세요.
+
+---
+
+## 13. 기술 온톨로지 — 입력 자동 보강
+
+### 13.1 온톨로지란
+
+온톨로지(Ontology)는 **특정 도메인의 개념과 개념 간 관계를 구조화한 지식 체계**입니다. 도서관의 분류 체계처럼, 개별 항목(기술명)을 상위 범주(컴포넌트 타입, 카테고리)에 매핑하고 속성(EOL 연도, 벤더, 라이선스)을 부여합니다.
+
+ArchPilot의 기술 온톨로지(`core/tech_ontology.py`)는 소프트웨어 기술 도메인에 특화된 온톨로지로, 다음 목적을 위해 설계되었습니다:
+
+```
+사용자가 "Oracle 11g"라고 입력하면 ArchPilot이 자동으로 파악해야 할 것들:
+  - 타입: database (서버가 아님)
+  - 카테고리: rdbms (NoSQL이 아님)
+  - 벤더: Oracle (commercial 라이선스)
+  - EOL: 2020년 (→ 현재 EOL 상태)
+  - criticality: high (데이터베이스이므로 자동 추론)
+```
+
+이 정보를 사용자가 매번 입력하면 번거롭고 일관성이 없습니다. 온톨로지가 기술명만으로 나머지를 자동으로 채워줍니다.
+
+---
+
+### 13.2 ArchPilot에서 온톨로지의 역할
+
+온톨로지는 **LLM 호출 이전 단계**에서 동작합니다. 입력 데이터를 정규화하고 보강하는 **전처리(Pre-processing)** 역할입니다:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         ArchPilot 데이터 흐름                             │
+│                                                                         │
+│  사용자 입력 (YAML/JSON/텍스트)                                           │
+│       │                                                                 │
+│       ▼                                                                 │
+│  ① 파싱 (parser.py / parser_agent.py)                                   │
+│       │  YAML → SystemModel (기본 구조)                                  │
+│       │                                                                 │
+│       ▼                                                                 │
+│  ② 온톨로지 보강 — enrich_component() ← 여기                             │
+│       │  tech 배열의 기술명 → 타입·EOL·벤더·라이선스 자동 추론            │
+│       │  결과: SystemModel 필드가 채워진 상태                             │
+│       │                                                                 │
+│       ▼                                                                 │
+│  ③ LLM 그라운딩 (analyze / modernize)                                   │
+│       │  완전히 채워진 SystemModel → 품질 높은 LLM 분석 입력              │
+│       │                                                                 │
+│       ▼                                                                 │
+│  ④ 분석 결과 / 현대화 설계 출력                                           │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**온톨로지 보강이 없으면:**
+- 사용자가 `type` 필드를 빠뜨려도 LLM이 알 수 없어 일반적인 분석만 수행
+- EOL 여부를 모르면 `tech_debt` 심각도를 정확히 산정 불가
+- 라이선스 타입을 모르면 벤더 Lock-in 위험을 탐지 못함
+
+**온톨로지 보강이 있으면:**
+- `type`이 없어도 기술명에서 자동 추론 → LLM에 정확한 컴포넌트 역할 전달
+- EOL이 자동으로 `lifecycle_status: "eol"`로 설정 → 분석 시 가중치 적용
+- `criticality`가 자동 추론 → HIGH 컴포넌트에 위험도 2배 적용
+
+---
+
+### 13.3 온톨로지 데이터 구조
+
+온톨로지의 기본 단위는 `TechRecord`입니다:
+
+```python
+@dataclass(frozen=True)
+class TechRecord:
+    canonical: str          # 정규화된 기술명  예: "Oracle 11g"
+    component_type: str     # ComponentType    예: "database"
+    category: str           # 세부 분류        예: "rdbms"
+    vendor: str             # 벤더명            예: "Oracle"
+    eol_year: int | None    # EOL 연도          예: 2020 (None = 현재 지원 중)
+    license_type: str       # 라이선스 유형     예: "commercial"
+                            #   (commercial | open-source | managed | proprietary)
+```
+
+`TECH_ONTOLOGY` 딕셔너리는 **소문자 기술명 → TechRecord** 매핑 테이블입니다:
+
+```python
+TECH_ONTOLOGY = {
+    "oracle 11g":  TechRecord("Oracle 11g",  "database", "rdbms",       "Oracle",  2020, "commercial"),
+    "kafka":       TechRecord("Apache Kafka","queue",    "message-broker","Confluent",None),
+    "spring boot": TechRecord("Spring Boot", "server",  "app-framework", "VMware",  None),
+    "redis":       TechRecord("Redis",       "cache",   "in-memory",     "Redis Ltd",None,"commercial"),
+    ...  # 397개 엔트리
+}
+```
+
+---
+
+### 13.4 온톨로지 구성 내용
+
+총 **397개 기술 엔트리**가 아래 17개 영역으로 분류됩니다:
+
+| 영역 | 주요 포함 기술 | 엔트리 수(약) |
+|------|--------------|-------------|
+| **언어·런타임** | Java 8/11/17/21, Python 3.x, Go, Node.js, TypeScript, Swift, Kotlin | 22 |
+| **프레임워크** | Spring Boot 2/3, FastAPI, Django, Flask, Next.js, Spring Batch | 11 |
+| **웹·앱 서버** | IIS 6/7/8.5, Apache 2.x, Nginx, Tomcat 6/7, JBoss, WebLogic, WebSphere | 16 |
+| **RDBMS** | Oracle 9i~19c, MySQL 5.5~8, PostgreSQL, SQL Server 2008~2019, DB2, Sybase | 14 |
+| **메인프레임 DB** | IBM DB2/z, IMS, VSAM, Adabas | 5 |
+| **클라우드 관리형 DB** | Aurora, Cloud SQL, Azure SQL, DynamoDB, Cosmos DB, BigQuery, Snowflake, Redshift, Pinecone, pgvector | 32 |
+| **NoSQL·캐시** | MongoDB, Cassandra, Redis, Memcached, Elasticsearch, HBase | 12 |
+| **메시지 큐·브로커** | Kafka, Kinesis, Event Hubs, RabbitMQ, ActiveMQ, IBM MQ, TIBCO EMS, SQS, SNS | 22 |
+| **ESB·통합 미들웨어** | MuleSoft, TIBCO BW, BizTalk, Oracle SOA, IBM IIB/ACE, webMethods, Axway | 11 |
+| **메인프레임** | IBM z/OS, COBOL, CICS, IMS TM, JCL, RPG, AS/400, HP NonStop | 9 |
+| **보안** | HSM, Vault, AWS KMS, Azure Key Vault, Keycloak, Okta, WAF, RACF, OAuth 2.0, SAML, FIDO2 | 26 |
+| **모니터링·관찰 가능성** | Dynatrace, CloudWatch, Azure Monitor, Prometheus, Grafana, Jaeger, DataDog, New Relic, ELK | 22 |
+| **스토리지** | S3, Azure Blob, GCS, HDFS, NFS, SAN, NAS, Delta Lake, Apache Iceberg | 15 |
+| **CDN·로드밸런서** | CloudFront, Akamai, Fastly, ALB/NLB, HAProxy, F5 BIG-IP | 15 |
+| **API Gateway** | AWS API Gateway, Azure APIM, Kong, Apigee, Traefik | 14 |
+| **클라우드 네이티브·컨테이너** | EKS, GKE, AKS, Docker, Kubernetes, Lambda, Fargate, Cloud Run, Istio, Dapr | 20 |
+| **특화 프로토콜** | HL7 FHIR, DICOM, OPC-UA, PROFINET, ISO 8583, MQTT, gRPC, GraphQL | 15 |
+| **데이터·AI 플랫폼** | Spark, Flink, SageMaker, Vertex AI, MLflow, Databricks, dbt, Power BI | 18 |
+
+#### 라이선스 유형 분류
+
+| `license_type` | 의미 | 예시 |
+|----------------|------|------|
+| `commercial` | 상용 라이선스, 벤더 계약 필요 | Oracle, IBM, SAP, Microsoft |
+| `open-source` | 오픈소스, 무료 사용 가능 | PostgreSQL, Kafka, Prometheus |
+| `managed` | 클라우드 관리형 서비스 (종량제) | AWS RDS, Azure SQL, GKE |
+| `proprietary` | 독점 기술, 특정 플랫폼에 종속 | COBOL, IBM JCL |
+
+#### criticality 자동 추론 규칙
+
+기술 카테고리에 따라 `criticality`가 자동 추론됩니다:
+
+| 추론 결과 | 해당 카테고리 |
+|----------|-------------|
+| **high** | rdbms, rdbms-mainframe, hierarchical, flat-file (데이터 저장소) |
+| **high** | tp-monitor, batch, os-mainframe (메인프레임 핵심 계층) |
+| **high** | hsm, iam-ldap, access-control, firewall, waf, siem (보안 핵심 장비) |
+| **low** | apm, metrics, log-analytics, visualization (모니터링·관찰) |
+
+---
+
+### 13.5 조회 알고리즘 — 버전 스트리핑
+
+사용자가 "Amazon ElastiCache Redis 7.2"처럼 상세 버전을 포함한 기술명을 입력해도 온톨로지가 매칭됩니다:
+
+```python
+def lookup(tech_name: str) -> TechRecord | None:
+    key = tech_name.lower().strip()
+
+    # 1단계: 정확한 소문자 매치 시도
+    if key in TECH_ONTOLOGY:
+        return TECH_ONTOLOGY[key]
+
+    # 2단계: 뒤에서 단어를 하나씩 제거하며 재시도
+    parts = key.split()
+    for n in range(len(parts) - 1, 0, -1):
+        shorter = " ".join(parts[:n])
+        if shorter in TECH_ONTOLOGY:
+            return TECH_ONTOLOGY[shorter]
+
+    return None  # 매칭 없음 → 보강 생략
+```
+
+**예시:**
+```
+"Amazon ElastiCache Redis 7.2"
+  → "amazon elasticache redis 7.2"  (miss)
+  → "amazon elasticache redis"       ✓ 매칭!
+```
+
+이 덕분에 YAML에 정확한 버전을 기재해도 온톨로지 혜택을 받습니다.
+
+---
+
+### 13.6 enrich_component() — 컴포넌트 자동 보강
+
+`enrich_component(comp: dict) -> dict`는 온톨로지를 실제로 적용하는 함수입니다. **원칙: 기존 값이 있으면 절대 덮어쓰지 않습니다.**
+
+```python
+# 사용자가 입력한 최소 컴포넌트
+before = {
+    "id": "oracle_primary",
+    "label": "Oracle 운영 DB",
+    "tech": ["Oracle 11g", "RAC"]
+}
+
+# enrich_component() 적용 후
+after = {
+    "id": "oracle_primary",
+    "label": "Oracle 운영 DB",
+    "tech": ["Oracle 11g", "RAC"],
+
+    # ↓ 온톨로지가 자동 추론한 값들
+    "type": "database",             # oracle 11g → component_type
+    "vintage": 2013,                # eol_year(2020) - 7 = 보수적 추정
+    "lifecycle_status": "eol",      # 2020 <= 현재 연도 → 자동 설정
+    "criticality": "high",          # rdbms 카테고리 → HIGH 자동 추론
+    "metadata": {
+        "vendor": "Oracle",
+        "category": "rdbms",
+        "license_type": "commercial"
+    }
+}
+```
+
+**자동 보강 항목 상세:**
+
+| 항목 | 보강 조건 | 보강 값 |
+|------|----------|--------|
+| `type` | 미지정 또는 "unknown" | 온톨로지 첫 매치의 `component_type` |
+| `vintage` | 미지정 + EOL 정보 있음 | `min(eol_year) - 7` (보수적 추정) |
+| `lifecycle_status` | 미지정 + EOL ≤ 현재 연도 | `"eol"` 자동 설정 |
+| `criticality` | 미지정 | 카테고리·타입 기반 high/low 추론 |
+| `metadata.vendor` | 없음 | 온톨로지의 vendor |
+| `metadata.category` | 없음 | 온톨로지의 category |
+| `metadata.license_type` | 없음 | 온톨로지의 license_type |
+
+---
+
+### 13.7 동작 시 호출 위치
+
+`enrich_component()`는 두 곳에서 호출됩니다:
+
+**① 텍스트 → SystemModel 변환 시 (parser_agent.py)**
+
+자연어나 비정형 텍스트로 시스템을 설명한 경우 LLM이 SystemModel을 생성합니다. 이 결과에 대해 온톨로지 보강을 적용합니다.
+
+**② draw.io 파일 업로드 시 (routers/ingest.py)**
+
+draw.io에서 직접 작성한 다이어그램을 업로드하면 `drawio_parser.py`가 SystemModel로 변환합니다. 이때 각 컴포넌트에 `enrich_component()`를 적용해 기술 정보를 보강합니다.
+
+```
+[draw.io XML 업로드]
+      ↓
+DrawioParser → SystemModel (스타일에서 타입 추론)
+      ↓
+enrich_component() 적용 (tech 배열에서 EOL·criticality 보강)
+      ↓
+AppSession에 저장 → analyze 준비 완료
+```
+
+YAML/JSON 직접 입력의 경우 사용자가 직접 필드를 기재하므로 기본적으로 보강이 덜 필요하지만, `type`이나 `lifecycle_status`를 생략했을 때 동일하게 보강됩니다.
+
+---
+
+### 13.8 온톨로지 확장하기
+
+프로젝트에서 사용하는 기술이 온톨로지에 없다면 `core/tech_ontology.py`의 `TECH_ONTOLOGY` 딕셔너리에 직접 추가할 수 있습니다:
+
+```python
+# 예: 사내 독자 기술 추가
+"tibero 6":  TechRecord("Tibero 6",  "database", "rdbms",    "TmaxSoft", 2026, "commercial"),
+"nexacro":   TechRecord("Nexacro",   "client",   "legacy-gui","Tobesoft", None, "commercial"),
+"xplatform": TechRecord("xPlatform", "client",   "ria",       "Tobesoft", 2022, "commercial"),
+```
+
+온톨로지에 없는 기술명은 `lookup()`이 `None`을 반환하고, `enrich_component()`가 해당 항목의 보강을 생략합니다. YAML에 `type`, `lifecycle_status`, `criticality`를 직접 명시하면 온톨로지 없이도 정확한 분석이 가능합니다.

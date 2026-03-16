@@ -1,4 +1,4 @@
-# ArchPilot — CLAUDE.md `v0.2.4`
+# ArchPilot — CLAUDE.md `v0.2.5`
 
 ## 프로젝트 개요
 
@@ -233,6 +233,22 @@ output/
 
 ## 📝 변경 이력
 
+### v0.2.5 (2026-03-16) — draw.io 클라우드 Swimlane 시각화 & 컴포넌트 패널 현행화 & 기술 부채 개선
+
+- ✨ `renderers/drawio.py` — `HOST_SWIMLANE_STYLES` 추가: 클라우드 공급자별 색상 구분 (AWS 주황·GCP 파랑·Azure 하늘·On-Premise 회색·Hybrid 초록), `startSize=28` 확대
+- ✨ `renderers/drawio_library.py` — `Unknown` 컴포넌트 타입 추가, `_CLOUD_CONTAINERS` 5종 swimlane 신규 (draw.io Desktop 라이브러리 총 20개)
+- ✨ `renderers/drawio_parser.py` — GCP 16종·Azure 18종·Kubernetes 7종 shape 패턴 추가 (총 43개 신규 패턴)
+- ✨ `ui/templates/app.html.j2` — ArchPilot 컴포넌트 패널: 10개→15개+Swimlane 5개 (Unknown·Mainframe·ESB·Security·Monitoring 추가), STYLE_MAP 완전 동기화
+- 🐛 `ui/templates/app.html.j2` — Alpine.js `x-for` 내부 `x-if` 중첩 버그 수정 → `x-show` 방식으로 교체
+- 📝 `ui/templates/app.html.j2` — 사용 가이드 🖊 편집기 탭: draw.io Desktop 파일 불러오기·편집 후 YAML 보완 워크플로우 신규 작성
+- 📝 `ui/templates/app.html.j2` — 사용 가이드 💡 AI 활용 팁 탭: AI 대화 예시·draw.io+AI 조합 워크플로우 신규 작성
+- 🔧 `ui/session.py` — `busy()` `@contextmanager` → `@asynccontextmanager` + `asyncio.Lock` (경쟁 조건 수정)
+- 🔧 `ui/stream_utils.py` — `collect_stream()` 헬퍼 신규: LLM 스트리밍 축적 패턴 6곳 중복 제거
+- 🔧 `llm/prompts/` — `prompts.py` (1,157줄) → `shared·ingest·analyze·modernize` 4개 모듈로 분리, `__init__.py` re-export 하위 호환 유지
+- 🐛 `cli/_utils.py` — `Console.print(err=True)` 미지원 API 버그 수정 → `Console(stderr=True)` 전용 인스턴스 사용
+- ✅ `tests/test_helpers.py` 30개 신규 (token_match·best_id·repair_connections·clean_json)
+- ✅ `tests/test_cmd_drawio.py` 20개 신규 (export·watch·setup·edit·reparse·merge_metadata) — 총 **391개** 통과
+
 ### v0.2.4 (2026-03-15) — 데이터 흐름 개선 & DT/AI 패턴 확장 & 부분 수정
 
 - ✨ `ui/schemas.py` — `ModernizeRequest`에 `feedback: str | None` 필드 추가 (부분 수정 지시사항)
@@ -308,7 +324,7 @@ output/
 
 ### v0.2.0 (2026-03-13) — 아키텍처 문서화 완료 및 PyPI 배포 준비
 
-- ✨ `core/tech_ontology.py` — TechOntology 설계 (70+ 기술 스택 자동 타입 추론)
+- ✨ `core/tech_ontology.py` — TechOntology 설계 (397개 기술 엔트리 — EOL·벤더·라이선스·criticality 자동 추론)
 - ✨ `renderers/drawio_parser.py` — draw.io XML → SystemModel 역방향 파서
 - ✨ `renderers/drawio_library.py` — draw.io Desktop 컴포넌트 라이브러리 생성
 - ✨ `core/drawio_config.py` — Electron LevelDB 직접 주입으로 draw.io Desktop 설정 자동화

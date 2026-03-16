@@ -1,7 +1,7 @@
 # ArchPilot — 기능 명세 (SPEC)
 
-버전: 0.2.4
-최종 수정: 2026-03-15
+버전: 0.2.5
+최종 수정: 2026-03-16
 
 ---
 
@@ -130,9 +130,9 @@ archpilot ingest <file>
 
 ```
 archpilot analyze <system.json>
-  --output, -o    출력 디렉토리 (기본: 입력 파일 위치)
-  --verbose, -v   상세 출력
-  --format, -f    출력 포맷: json|markdown (기본: json)
+  --requirements, -r   현대화 목표 (component_decisions 품질에 직접 영향)
+  --output, -o         출력 디렉토리 (기본: 입력 파일 위치)
+  --verbose, -v        상세 출력
 ```
 
 ---
@@ -186,10 +186,11 @@ CloudFront CDN, API Gateway, CI/CD 파이프라인"
 
 ```
 archpilot modernize <system.json>
-  --requirements, -r   자연어 현대화 요구사항 (필수)
+  --requirements, -r   자연어 현대화 요구사항 (생략 시 대화형 입력)
   --output, -o         출력 디렉토리
-  --format, -f         출력 포맷: mermaid,png,drawio (기본: mermaid)
-  --analysis           기존 analysis.json 참조 여부 (기본: True)
+  --format, -f         출력 포맷: mermaid,png,svg,drawio (기본: mermaid)
+  --scenario, -s       현대화 시나리오: full_replace|partial|additive (미지정 시 분석 결과 권장값 사용)
+  --no-analysis        analysis.json 자동 참조 건너뜀
 ```
 
 ---
@@ -298,8 +299,10 @@ archpilot init
 |----|---------------|-------------|
 | macOS | `/Applications/draw.io.app`, `~/Applications/draw.io.app` | `~/Library/Application Support/draw.io/Local Storage/leveldb` |
 | Windows | `Program Files`, `LOCALAPPDATA\Programs\draw.io` | `%APPDATA%\draw.io\Local Storage\leveldb` |
-| Linux (deb) | `/opt/draw.io`, `/usr/bin/drawio`, `~/.local/bin/drawio` | `~/.config/draw.io/Local Storage/leveldb` |
+| Linux (deb) | `/opt/draw.io`, `/usr/bin/drawio`, `/usr/local/bin/drawio`, `~/.local/bin/drawio` | `~/.config/draw.io/Local Storage/leveldb` |
 | Linux (Snap) | `/snap/bin/drawio` | `~/snap/drawio/common/.config/draw.io/Local Storage/leveldb` |
+| Linux (Flatpak) | `/var/lib/flatpak/exports/bin/drawio`, `~/.local/share/flatpak/exports/bin/drawio` | `~/.var/app/com.jgraph.drawio.desktop/config/draw.io/Local Storage/leveldb` |
+| Linux (AppImage) | `~/Applications/draw*.AppImage`, `~/Downloads/draw*.AppImage` | `~/.config/draw.io/Local Storage/leveldb` |
 
 ---
 
@@ -516,7 +519,7 @@ class BaseRenderer(ABC):
 ```toml
 [project]
 name = "archpilot"
-version = "0.2.4"
+version = "0.2.5"
 requires-python = ">=3.11"
 dependencies = [
     "typer[all]>=0.12,<1.0",
@@ -549,11 +552,10 @@ tag v*.*.* → ruff + mypy → pytest → build wheel → upload to PyPI (Prod)
 
 ---
 
-## 9. 미지원 범위 (v0.2.4)
+## 9. 미지원 범위 (v0.2.5)
 
 - PlantUML / C4 모델 출력
 - 실시간 협업 편집
 - 다중 시스템 비교 (3개 이상)
 - 비용 추정 자동화
 - Terraform / CloudFormation 코드 생성
-- Linux Flatpak 설치 draw.io 자동 인식

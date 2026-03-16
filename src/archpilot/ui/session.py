@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any, AsyncIterator
 
 
 @dataclass
@@ -43,21 +44,31 @@ class AppSession:
     _busy: bool = field(default=False, repr=False)
     _busy_operation: str = field(default="", repr=False)
 
+    def __post_init__(self) -> None:
+        # asyncio.Lock으로 동시 스트리밍 작업 충돌 방지
+        # 단일 사용자 도구이지만 팀 서버(-host 0.0.0.0) 사용 시 경쟁 조건 방어
+        self._lock: asyncio.Lock = asyncio.Lock()
+
     @property
     def is_busy(self) -> bool:
         """LLM 스트리밍 작업이 진행 중이면 True."""
         return self._busy
 
-    @contextmanager
-    def busy(self, operation: str) -> Iterator[None]:
-        """스트리밍 작업 구간을 표시한다. 종료(정상·예외 모두)시 자동 해제."""
-        self._busy = True
-        self._busy_operation = operation
-        try:
-            yield
-        finally:
-            self._busy = False
-            self._busy_operation = ""
+    @asynccontextmanager
+    async def busy(self, operation: str) -> AsyncIterator[None]:
+        """스트리밍 작업 구간을 표시한다.
+
+        asyncio.Lock으로 동시 접근을 직렬화한다.
+        종료(정상·예외 모두)시 자동 해제.
+        """
+        async with self._lock:
+            self._busy = True
+            self._busy_operation = operation
+            try:
+                yield
+            finally:
+                self._busy = False
+                self._busy_operation = ""
 
     def reset_modernization(self) -> None:
         """새 시스템 주입 시 이전 분석·현대화 결과를 모두 초기화한다."""

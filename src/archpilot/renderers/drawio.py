@@ -8,6 +8,35 @@ from typing import ClassVar
 from archpilot.core.models import ComponentType, SystemModel
 from archpilot.renderers.base import BaseRenderer
 
+# 호스트 타입별 swimlane 스타일 — 클라우드 공급자를 색상으로 구분
+HOST_SWIMLANE_STYLES: dict[str, str] = {
+    "on-premise": (
+        "swimlane;startSize=28;fillColor=#E6E6E6;strokeColor=#666666;"
+        "fontStyle=1;fontSize=11;fontColor=#333333;"
+    ),
+    "aws": (
+        "swimlane;startSize=28;fillColor=#FFE6CC;strokeColor=#d79b00;"
+        "fontStyle=1;fontSize=11;fontColor=#7A4000;"
+    ),
+    "gcp": (
+        "swimlane;startSize=28;fillColor=#E8F0FE;strokeColor=#4285F4;"
+        "fontStyle=1;fontSize=11;fontColor=#1A3C8C;"
+    ),
+    "azure": (
+        "swimlane;startSize=28;fillColor=#CCE5F5;strokeColor=#0078D4;"
+        "fontStyle=1;fontSize=11;fontColor=#004578;"
+    ),
+    "hybrid": (
+        "swimlane;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;"
+        "fontStyle=1;fontSize=11;fontColor=#1E4D1E;"
+    ),
+}
+# 알 수 없는 호스트 타입 폴백 스타일
+_DEFAULT_SWIMLANE_STYLE = (
+    "swimlane;startSize=28;fillColor=#f5f5f5;strokeColor=#666666;"
+    "fontStyle=1;fontSize=11;"
+)
+
 STYLE_MAP: dict[ComponentType, str] = {
     ComponentType.SERVER:       "rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;",
     ComponentType.DATABASE:     "shape=mxgraph.flowchart.database;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;",
@@ -59,16 +88,17 @@ class DrawioRenderer(BaseRenderer):
             group_w = min(n, COLS) * COL_GAP + MARGIN
             group_h = rows * ROW_GAP + MARGIN * 2
 
-            host_labels = {
+            _HOST_DISPLAY = {
                 "on-premise": "On-Premise", "aws": "AWS Cloud",
                 "gcp": "GCP Cloud", "azure": "Azure Cloud", "hybrid": "Hybrid",
             }
-            group_label = host_labels.get(host, host)
+            group_label = _HOST_DISPLAY.get(host, host)
             group_id = f"group_{host.replace('-', '_')}"
 
+            swimlane_style = HOST_SWIMLANE_STYLES.get(host, _DEFAULT_SWIMLANE_STYLE)
             group_cell = ET.SubElement(graph_root, "mxCell",
                 id=group_id, value=group_label,
-                style="swimlane;startSize=20;fillColor=#f5f5f5;strokeColor=#666666;",
+                style=swimlane_style,
                 vertex="1", parent="1")
             ET.SubElement(group_cell, "mxGeometry",
                 x=str(MARGIN), y=str(group_y),

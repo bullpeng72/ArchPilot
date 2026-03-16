@@ -11,9 +11,10 @@ import json
 from pathlib import Path
 
 from archpilot.core.models import ComponentType
-from archpilot.renderers.drawio import STYLE_MAP
+from archpilot.renderers.drawio import HOST_SWIMLANE_STYLES, STYLE_MAP
 
 # ArchPilot 컴포넌트 정의 (이름 · 치수 · 스타일)
+# 각 항목은 "type" 키(STYLE_MAP 참조) 또는 직접 "style" 키를 가질 수 있다.
 ARCHPILOT_SHAPES: list[dict] = [
     {"name": "Server",        "type": ComponentType.SERVER,       "w": 140, "h": 60},
     {"name": "Database",      "type": ComponentType.DATABASE,     "w": 80,  "h": 80},
@@ -30,6 +31,16 @@ ARCHPILOT_SHAPES: list[dict] = [
     {"name": "ESB",           "type": ComponentType.ESB,          "w": 160, "h": 60},
     {"name": "Security",      "type": ComponentType.SECURITY,     "w": 80,  "h": 80},
     {"name": "Monitoring",    "type": ComponentType.MONITORING,   "w": 140, "h": 60},
+    {"name": "Unknown",       "type": ComponentType.UNKNOWN,      "w": 120, "h": 60},
+]
+
+# 클라우드 호스트 컨테이너 swimlane 정의 (drag-and-drop 용)
+_CLOUD_CONTAINERS: list[dict] = [
+    {"name": "On-Premise",  "style": HOST_SWIMLANE_STYLES["on-premise"], "w": 560, "h": 320},
+    {"name": "AWS Cloud",   "style": HOST_SWIMLANE_STYLES["aws"],        "w": 560, "h": 320},
+    {"name": "GCP Cloud",   "style": HOST_SWIMLANE_STYLES["gcp"],        "w": 560, "h": 320},
+    {"name": "Azure Cloud", "style": HOST_SWIMLANE_STYLES["azure"],      "w": 560, "h": 320},
+    {"name": "Hybrid",      "style": HOST_SWIMLANE_STYLES["hybrid"],     "w": 560, "h": 320},
 ]
 
 
@@ -49,16 +60,27 @@ def _cell_xml(name: str, style: str, w: int, h: int) -> str:
     )
 
 
+def _shape_style(shape: dict) -> str:
+    """shape dict에서 스타일 문자열을 반환한다.
+
+    "style" 키가 있으면 그대로 사용하고, 없으면 STYLE_MAP에서 type으로 조회한다.
+    """
+    if "style" in shape:
+        return shape["style"]
+    return STYLE_MAP[shape["type"]]
+
+
 def generate_mxlibrary_xml() -> str:
     """draw.io mxlibrary 형식의 XML 문자열을 반환한다."""
+    all_shapes = ARCHPILOT_SHAPES + _CLOUD_CONTAINERS
     entries = [
         {
-            "xml":   _cell_xml(s["name"], STYLE_MAP[s["type"]], s["w"], s["h"]),
+            "xml":   _cell_xml(s["name"], _shape_style(s), s["w"], s["h"]),
             "w":     s["w"],
             "h":     s["h"],
             "title": s["name"],
         }
-        for s in ARCHPILOT_SHAPES
+        for s in all_shapes
     ]
     # JSON을 XML text content로 넣을 때 <, >, & 를 이스케이프해야 한다.
     # 그렇지 않으면 XML 파서가 <mxCell...> 을 자식 엘리먼트로 잘못 해석한다.

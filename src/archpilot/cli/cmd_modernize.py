@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from archpilot.cli._utils import load_system_model
-from archpilot.core.models import AnalysisResult
+from archpilot.core.models import AnalysisResult, ModernizationScenario
 from archpilot.renderers.base import VALID_FORMATS
 
 console = Console()
@@ -21,6 +21,11 @@ def modernize(
     requirements: Annotated[str, typer.Option("--requirements", "-r", help="자연어 현대화 요구사항")] = "",
     output: Annotated[Path | None, typer.Option("--output", "-o", help="출력 디렉토리 (기본: system.json 위치)")] = None,
     formats: Annotated[str, typer.Option("--format", "-f", help="다이어그램 포맷 (콤마 구분): mermaid,png,svg,drawio")] = "mermaid",
+    scenario: Annotated[ModernizationScenario | None, typer.Option(
+        "--scenario", "-s",
+        help="현대화 시나리오: full_replace (전체 교체) | partial (부분 현대화) | additive (점진적 확장). 미지정 시 분석 결과 권장값 사용",
+        case_sensitive=False,
+    )] = None,
     no_analysis: Annotated[bool, typer.Option("--no-analysis", help="analysis.json 참조 건너뜀")] = False,
 ) -> None:
     """레거시 시스템을 자연어 요구사항에 따라 현대화된 아키텍처로 재설계합니다."""
@@ -59,9 +64,12 @@ def modernize(
     from archpilot.llm.modernizer import SystemModernizer
     from archpilot.renderers.base import run_renderers_parallel
 
+    if scenario:
+        console.print(f"[dim]시나리오: {scenario.label}[/dim]")
+
     modernizer = SystemModernizer()
     try:
-        modern = modernizer.modernize(legacy, requirements, analysis)
+        modern = modernizer.modernize(legacy, requirements, analysis, scenario)
     except Exception as e:
         console.print(f"[red]현대화 설계 생성 실패: {e}[/red]", err=True)
         raise typer.Exit(1) from e

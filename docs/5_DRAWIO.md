@@ -2,7 +2,7 @@
 
 > draw.io Desktop ↔ ArchPilot 양방향 워크플로우
 
-**Version**: 0.2.4 | **Last Updated**: 2026-03-15
+**Version**: 0.2.5 | **Last Updated**: 2026-03-16
 
 ---
 
@@ -64,6 +64,8 @@ draw.io Desktop이 없으면 먼저 설치합니다:
 - **Windows**: `winget install JGraph.Draw` 또는 공식 사이트에서 `.exe` 다운로드
 - **Linux (deb)**: `sudo apt install drawio` 또는 `.deb` 패키지
 - **Linux (Snap)**: `sudo snap install drawio`
+- **Linux (Flatpak)**: `flatpak install flathub com.jgraph.drawio.desktop`
+- **Linux (AppImage)**: 공식 사이트에서 `.AppImage` 다운로드 후 실행 권한 부여
 
 > **참고**: draw.io Desktop이 없어도 [diagrams.net](https://app.diagrams.net) (웹 버전)으로 대부분의 기능을 사용할 수 있습니다.
 
@@ -101,8 +103,10 @@ archpilot drawio setup
 |----|----------------|-------------|
 | macOS | `/Applications/draw.io.app` | `~/Library/Application Support/draw.io/Local Storage/leveldb` |
 | Windows | `%ProgramFiles%\draw.io\draw.io.exe` | `%APPDATA%\draw.io\Local Storage\leveldb` |
-| Linux (deb) | `/usr/bin/drawio` | `~/.config/draw.io/Local Storage/leveldb` |
+| Linux (deb) | `/usr/bin/drawio`, `/usr/local/bin/drawio` | `~/.config/draw.io/Local Storage/leveldb` |
 | Linux (Snap) | `/snap/bin/drawio` | `~/snap/drawio/common/.config/draw.io/Local Storage/leveldb` |
+| Linux (Flatpak) | `/var/lib/flatpak/exports/bin/drawio` | `~/.var/app/com.jgraph.drawio.desktop/config/draw.io/Local Storage/leveldb` |
+| Linux (AppImage) | `~/Applications/draw*.AppImage` (자동 탐색) | `~/.config/draw.io/Local Storage/leveldb` |
 
 ---
 
@@ -421,16 +425,32 @@ HTML 태그(`<b>`, `<br>` 등)는 자동 제거됩니다.
 
 ## 9. Web 앱에서 draw.io 사용
 
-### 9.1 draw.io XML 탭
+### 9.1 내장 draw.io 편집기
 
 ```bash
 archpilot serve output/ --open
 ```
 
-브라우저 Web 앱에서:
-1. 상단 탭 → "draw.io XML" 선택
-2. XML 텍스트 영역에 붙여넣기
-3. "분석 시작" 클릭
+브라우저 Web 앱에는 **embed.diagrams.net** 기반의 draw.io 편집기가 내장되어 있습니다.
+
+**새로 그리기:**
+1. 좌측 입력 패널 상단 `🖊 편집` 탭 클릭
+2. 내장 draw.io 편집기에서 시스템 토폴로지 그리기
+3. **Save** 버튼 클릭 → 자동으로 `system.json` 갱신
+
+**기존 draw.io 파일 불러오기:**
+1. `🖊 편집` 탭 클릭 → 편집기 열기
+2. 편집기 메뉴 `Extras → Edit Diagram` (단축키: Ctrl+Shift+X)
+3. 기존 .drawio 파일의 XML 내용을 전체 선택 후 붙여넣기
+4. **OK** 클릭 → 다이어그램 로드됨
+5. **Save** 클릭 → 시스템 모델 반영
+
+> **draw.io 파일 XML 복사 방법:**
+> - draw.io Desktop: `Extras → Edit Diagram` → 전체 선택(Ctrl+A) → 복사
+> - diagrams.net(Web): `Extras → Edit Diagram` → 전체 선택 → 복사
+> - 파일 직접: `.drawio` 파일은 XML 텍스트 파일이므로 텍스트 편집기로 열어 복사 가능
+
+**ArchPilot 컴포넌트 가이드 패널:** 편집기 좌측에 컴포넌트 타입 목록이 표시됩니다. 각 항목 클릭 시 스타일이 클립보드에 복사되며, 도형 우클릭 → `Edit Style` → 붙여넣기로 적용할 수 있습니다.
 
 ### 9.2 draw.io 다이어그램 다운로드
 
@@ -439,9 +459,11 @@ archpilot serve output/ --open
 ```
 GET /api/diagram/legacy   → legacy/diagram.drawio 다운로드
 GET /api/diagram/modern   → modern/diagram.drawio 다운로드
+GET /api/download/legacy?fmt=drawio  → 동일 (v0.2.4+)
+GET /api/download/modern?fmt=drawio  → 동일 (v0.2.4+)
 ```
 
-또는 Web 앱 UI의 다운로드 버튼 사용.
+또는 Web 앱 우측 리포트 패널의 다운로드 버튼 사용.
 
 ---
 

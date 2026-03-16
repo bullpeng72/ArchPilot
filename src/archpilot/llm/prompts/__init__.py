@@ -1,0 +1,43 @@
+"""LLM 프롬프트 패키지 — 하위 호환 re-export.
+
+기존 코드의 `from archpilot.llm.prompts import X` 임포트가
+수정 없이 동작하도록 모든 상수를 여기서 re-export한다.
+"""
+
+from archpilot.llm.prompts.shared import LLM_JSON_SUFFIX
+from archpilot.llm.prompts.ingest import (
+    PARSE_SYSTEM_PROMPT,
+    CHAT_INGEST_SYSTEM_PROMPT,
+)
+from archpilot.llm.prompts.analyze import (
+    ANALYZE_SYSTEM_PROMPT,
+    MULTI_PERSPECTIVE_PROMPT,
+    ANALYZE_RMC_PROMPT,
+)
+from archpilot.llm.prompts.modernize import (
+    MODERNIZE_SYSTEM_PROMPT,
+    MODERNIZE_PATCH_SYSTEM_PROMPT,
+    MODERNIZE_PATCH_USER_TEMPLATE,
+    MODERNIZE_SKELETON_PROMPT,
+    MULTI_PERSPECTIVE_DESIGN_PROMPT,
+    DESIGN_RATIONALE_PROMPT,
+    MIGRATION_PLAN_PROMPT,
+    MIGRATION_PLAN_RMC_PROMPT,
+)
+
+__all__ = [
+    "LLM_JSON_SUFFIX",
+    "PARSE_SYSTEM_PROMPT",
+    "CHAT_INGEST_SYSTEM_PROMPT",
+    "ANALYZE_SYSTEM_PROMPT",
+    "MULTI_PERSPECTIVE_PROMPT",
+    "ANALYZE_RMC_PROMPT",
+    "MODERNIZE_SYSTEM_PROMPT",
+    "MODERNIZE_PATCH_SYSTEM_PROMPT",
+    "MODERNIZE_PATCH_USER_TEMPLATE",
+    "MODERNIZE_SKELETON_PROMPT",
+    "MULTI_PERSPECTIVE_DESIGN_PROMPT",
+    "DESIGN_RATIONALE_PROMPT",
+    "MIGRATION_PLAN_PROMPT",
+    "MIGRATION_PLAN_RMC_PROMPT",
+]

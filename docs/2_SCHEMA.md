@@ -2,7 +2,7 @@
 
 > 레거시 시스템을 ArchPilot 규격 YAML/JSON으로 작성하는 방법
 
-**Version**: 0.2.4 | **Last Updated**: 2026-03-15
+**Version**: 0.2.5 | **Last Updated**: 2026-03-16
 
 ---
 
@@ -27,7 +27,7 @@
 
 ```yaml
 # ──────────────────────────────────────────────
-# ArchPilot System Schema v0.2.4
+# ArchPilot System Schema v0.2.5
 # ──────────────────────────────────────────────
 
 name: string                    # 필수. 시스템 이름

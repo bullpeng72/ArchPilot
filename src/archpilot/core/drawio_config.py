@@ -73,11 +73,25 @@ def find_drawio_executable() -> Optional[Path]:
         for p in [
             Path("/opt/draw.io/draw.io"),
             Path("/usr/bin/drawio"),
-            Path("/snap/bin/drawio"),             # Snap 심볼릭 링크
+            Path("/usr/local/bin/drawio"),
+            Path("/snap/bin/drawio"),                                          # Snap 심볼릭 링크
             home / ".local" / "bin" / "drawio",
+            # Flatpak (시스템/사용자 레벨)
+            Path("/var/lib/flatpak/exports/bin/drawio"),
+            home / ".local" / "share" / "flatpak" / "exports" / "bin" / "drawio",
         ]:
             if p.exists():
                 return p
+        # AppImage: 사용자가 임의 위치에 내려받은 경우 — 일반적인 보관 디렉토리 탐색
+        for search_dir in [
+            home / "Applications",
+            home / ".local" / "bin",
+            home / "Downloads",
+            Path("/opt"),
+        ]:
+            if search_dir.exists():
+                for appimage in search_dir.glob("draw*.AppImage"):
+                    return appimage
 
     return None
 
@@ -145,8 +159,9 @@ def find_drawio_localstorage_path() -> Optional[Path]:
         ]
     else:  # Linux
         candidates = [
-            home / ".config" / "draw.io" / "Local Storage" / "leveldb",   # 일반 설치 / deb
-            home / "snap" / "drawio" / "common" / ".config" / "draw.io" / "Local Storage" / "leveldb",  # Snap
+            home / ".config" / "draw.io" / "Local Storage" / "leveldb",                                           # deb / AppImage / 수동 설치
+            home / "snap" / "drawio" / "common" / ".config" / "draw.io" / "Local Storage" / "leveldb",            # Snap
+            home / ".var" / "app" / "com.jgraph.drawio.desktop" / "config" / "draw.io" / "Local Storage" / "leveldb",  # Flatpak
         ]
 
     for p in candidates:
@@ -213,6 +228,53 @@ def inject_custom_library(lib_path: Path) -> bool:
     current_config["libraries"] = ""
 
     # 새 LevelDB 레코드 생성 후 append
+    record = _make_ldb_record(current_config, last_seq + 1)
+    try:
+        with open(log_file, "ab") as f:
+            f.write(record)
+        return True
+    except OSError:
+        return False
+
+
+_DEFAULT_LIBRARIES = "general;uml;er;bpmn;flowchart;basic;arrows2"
+
+
+def remove_custom_library() -> bool:
+    """draw.io Desktop의 localStorage에서 ArchPilot 라이브러리를 제거한다.
+
+    customLibraries에서 ArchPilot 항목을 삭제하고, libraries를 기본값으로 복원한다.
+    draw.io가 실행 중이 아닐 때 호출해야 한다.
+
+    Returns:
+        True if successful (항목이 없어도 True), False on I/O error.
+    """
+    ldb_dir = find_drawio_localstorage_path()
+    if ldb_dir is None:
+        return False
+
+    log_files = sorted(ldb_dir.glob("*.log"))
+    if not log_files:
+        return False
+    log_file = log_files[-1]
+
+    try:
+        data = log_file.read_bytes()
+    except OSError:
+        return False
+
+    current_config, last_seq = _read_drawio_config_from_ldb(data)
+    if current_config is None:
+        return True  # 설정 없음 — 제거할 항목 없음
+
+    custom_libs: list[str] = current_config.get("customLibraries", [])
+    filtered = [e for e in custom_libs if "archpilot" not in e.lower()]
+    if filtered == custom_libs and current_config.get("libraries") != "":
+        return True  # 이미 깨끗한 상태
+
+    current_config["customLibraries"] = filtered
+    current_config["libraries"] = _DEFAULT_LIBRARIES
+
     record = _make_ldb_record(current_config, last_seq + 1)
     try:
         with open(log_file, "ab") as f:

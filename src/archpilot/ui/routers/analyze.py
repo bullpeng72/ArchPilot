@@ -20,6 +20,7 @@ from archpilot.llm.utils import (
 )
 from archpilot.ui import session as sess
 from archpilot.ui.helpers import _clean_json, _sse, _stream_response
+from archpilot.ui.stream_utils import collect_stream
 
 _log = logging.getLogger("archpilot.server")
 
@@ -43,7 +44,7 @@ async def analyze_stream(request: Request) -> StreamingResponse:
 
     async def generator():
         try:
-            with s.busy("analyze"):
+            async with s.busy("analyze"):
                 yield _sse({"type": "progress", "pct": 5, "msg": "분석을 시작합니다..."})
 
                 payload = compress_system_dict(s.system, MAX_PAYLOAD_CHARS)
@@ -91,13 +92,12 @@ async def analyze_stream(request: Request) -> StreamingResponse:
                     f"pain_points={json.dumps(s.analysis.get('pain_points', [])[:5], ensure_ascii=False)}\n"
                     f"tech_debt={json.dumps(s.analysis.get('tech_debt', [])[:5], ensure_ascii=False)}"
                 )
-                persp_text = ""
-                async for chunk in client.stream_chat(
+                persp_text = await collect_stream(
+                    client,
                     MULTI_PERSPECTIVE_PROMPT + LLM_JSON_SUFFIX,
                     persp_user_msg,
                     max_tokens=MAX_PERSPECTIVE_TOKENS,
-                ):
-                    persp_text += chunk
+                )
 
                 multi_perspective_dict = None
                 try:
@@ -115,13 +115,12 @@ async def analyze_stream(request: Request) -> StreamingResponse:
                     f"분석 대상 시스템:\n{compress_system_dict(s.system, MAX_SYSTEM_CHARS)}\n\n"
                     f"방금 생성한 분석 결과:\n{json.dumps(s.analysis, ensure_ascii=False, indent=2)}"
                 )
-                rmc_text = ""
-                async for chunk in client.stream_chat(
+                rmc_text = await collect_stream(
+                    client,
                     ANALYZE_RMC_PROMPT + LLM_JSON_SUFFIX,
                     rmc_user_msg,
                     max_tokens=MAX_RMC_TOKENS,
-                ):
-                    rmc_text += chunk
+                )
 
                 try:
                     rmc_dict = json.loads(_clean_json(rmc_text))

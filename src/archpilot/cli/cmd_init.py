@@ -20,7 +20,17 @@ def _prompt_api_key(prompt: str) -> str:
 
 
 def init_cmd() -> None:
-    """[bold]~/.archpilot/config.env[/bold] 파일을 생성하고 API 키를 설정합니다."""
+    """[bold]~/.archpilot/config.env[/bold] 파일을 생성하고 API 키를 설정합니다.
+
+    \b
+    대화형으로 아래 항목을 입력받습니다:
+      • OpenAI API Key  (sk-... 형식, 입력 내용 비표시)
+      • 사용할 모델     (기본: gpt-4o-mini)
+      • 출력 디렉토리   (기본: ./output)
+
+    \b
+    로컬 .env 파일이 존재하면 전역 설정을 오버라이드합니다.
+    """
     console.print(Panel("[bold cyan]ArchPilot 초기화[/bold cyan]", expand=False))
 
     if GLOBAL_ENV_FILE.exists():

@@ -16,6 +16,7 @@ from archpilot.core.models import (
     LifecycleStatus,
 )
 from archpilot.core.parser import ParseError, SystemParser
+from archpilot.llm.utils import MAX_CHAT_TOKENS
 from archpilot.renderers.drawio import DrawioRenderer
 from archpilot.renderers.mermaid import MermaidRenderer
 from archpilot.ui import session as sess
@@ -25,6 +26,16 @@ from archpilot.ui.schemas import ChatIngestRequest, DrawioIngestRequest, IngestR
 _log = logging.getLogger("archpilot.server")
 
 router = APIRouter(prefix="/api")
+
+
+def _safe_enum(val: str | None, enum_cls: type, default):  # type: ignore[type-arg]
+    """val을 enum_cls로 변환하고, 실패하면 default를 반환한다."""
+    if val is None:
+        return default
+    try:
+        return enum_cls(val)
+    except ValueError:
+        return default
 
 
 def _get_output_dir(request: Request) -> Path:
@@ -168,25 +179,20 @@ async def ingest_drawio(req: DrawioIngestRequest, request: Request) -> dict:
 
                 if (comp.criticality == Criticality.MEDIUM
                         and prev.get("criticality") not in (None, "medium")):
-                    try:
-                        patch["criticality"] = Criticality(prev["criticality"])
-                    except ValueError:
-                        pass
+                    restored = _safe_enum(prev.get("criticality"), Criticality, None)
+                    if restored is not None:
+                        patch["criticality"] = restored
 
                 if (comp.lifecycle_status == LifecycleStatus.ACTIVE
                         and prev.get("lifecycle_status") not in (None, "active")):
-                    try:
-                        patch["lifecycle_status"] = LifecycleStatus(prev["lifecycle_status"])
-                    except ValueError:
-                        pass
+                    restored = _safe_enum(prev.get("lifecycle_status"), LifecycleStatus, None)
+                    if restored is not None:
+                        patch["lifecycle_status"] = restored
 
                 if comp.data_classification is None and prev.get("data_classification"):
-                    try:
-                        patch["data_classification"] = DataClassification(
-                            prev["data_classification"]
-                        )
-                    except ValueError:
-                        pass
+                    restored = _safe_enum(prev.get("data_classification"), DataClassification, None)
+                    if restored is not None:
+                        patch["data_classification"] = restored
 
                 if not comp.owner and prev.get("owner"):
                     patch["owner"] = prev["owner"]
@@ -235,6 +241,7 @@ async def chat_ingest_stream(req: ChatIngestRequest, request: Request) -> Stream
             async for chunk in client.stream_chat_messages(
                 CHAT_INGEST_SYSTEM_PROMPT,
                 req.messages,
+                max_tokens=MAX_CHAT_TOKENS,
             ):
                 full_text += chunk
                 yield _sse({"type": "chunk", "text": chunk})

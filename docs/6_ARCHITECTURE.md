@@ -1,7 +1,7 @@
 # ArchPilot — 내부 아키텍처
 
-버전: 0.2.4
-최종 수정: 2026-03-15
+버전: 0.2.5
+최종 수정: 2026-03-16
 
 ---
 
@@ -147,20 +147,26 @@ _dict_to_model(data: dict) → SystemModel
 ### 2.4 `core/tech_ontology.py` — 기술 스택 온톨로지
 
 ```python
-# 키워드 기반 ComponentType 자동 추론
-TECH_ONTOLOGY: dict[str, ComponentType] = {
-    "mysql": ComponentType.DATABASE,
-    "postgresql": ComponentType.DATABASE,
-    "redis": ComponentType.CACHE,
-    "kafka": ComponentType.QUEUE,
-    "nginx": ComponentType.GATEWAY,
-    ...
+@dataclass(frozen=True)
+class TechRecord:
+    canonical: str          # 정규 표기명 ("Apache Kafka")
+    component_type: str     # "queue" | "database" | "cache" | ...
+    category: str           # "message-broker" | "rdbms" | ...
+    vendor: str             # "Confluent" | "Oracle" | ...
+    eol_year: int | None    # None = 현재 지원 중
+    license_type: str = "open-source"  # commercial|open-source|managed|proprietary
+
+TECH_ONTOLOGY: dict[str, TechRecord] = {
+    "oracle 11g": TechRecord("Oracle 11g", "database", "rdbms", "Oracle", 2020, "commercial"),
+    "kafka":      TechRecord("Apache Kafka", "queue", "message-broker", "Confluent", None),
+    ...  # 397개 엔트리
 }
 
-def infer_component_type(tech: str | None, label: str) -> ComponentType: ...
+def enrich_component(comp: dict) -> dict: ...
+# 원칙: 기존 값이 있으면 절대 덮어쓰지 않음 (보완만)
 ```
 
-draw.io XML 파싱 및 자연어 입력 시 타입 자동 추론에 사용됨.
+ingest 및 draw.io 파싱 시 컴포넌트 type·EOL·criticality·vendor·license를 자동 보강한다. 버전 포함 기술명("Amazon ElastiCache Redis 7.2")은 끝에서부터 단어를 제거하며 온톨로지를 역방향 조회한다.
 
 ---
 
@@ -327,9 +333,10 @@ def write_library_file(path: Path) -> None:
 OS별 경로 탐색 및 Electron localStorage(LevelDB) 직접 조작.
 
 ```
-find_drawio_executable()      → macOS .app / Windows .exe / Linux snap|deb
-find_drawio_localstorage_path() → OS별 LevelDB 디렉토리
+find_drawio_executable()        → macOS .app / Windows .exe / Linux deb|snap|flatpak|AppImage
+find_drawio_localstorage_path() → OS별 LevelDB 디렉토리 (Flatpak 경로 포함)
 inject_custom_library(lib_path) → LevelDB WAL에 WriteBatch 추가
+remove_custom_library()         → ArchPilot 항목 제거 + libraries 기본값 복원
 ```
 
 #### LevelDB 직접 조작 원리
@@ -353,8 +360,10 @@ record 구조:
 |---|---|---|
 | macOS | `/Applications/draw.io.app` | `~/Library/Application Support/draw.io/Local Storage/leveldb` |
 | Windows | `C:\Program Files\draw.io\draw.io.exe` 또는 `%LOCALAPPDATA%\Programs\draw.io\draw.io.exe` | `%APPDATA%\draw.io\Local Storage\leveldb` |
-| Linux (deb) | `/usr/bin/drawio` | `~/.config/draw.io/Local Storage/leveldb` |
+| Linux (deb) | `/usr/bin/drawio`, `/usr/local/bin/drawio` | `~/.config/draw.io/Local Storage/leveldb` |
 | Linux (Snap) | `/snap/bin/drawio` | `~/snap/drawio/common/.config/draw.io/Local Storage/leveldb` |
+| Linux (Flatpak) | `/var/lib/flatpak/exports/bin/drawio`, `~/.local/share/flatpak/exports/bin/drawio` | `~/.var/app/com.jgraph.drawio.desktop/config/draw.io/Local Storage/leveldb` |
+| Linux (AppImage) | `~/Applications/draw*.AppImage` 등 (glob 탐색) | `~/.config/draw.io/Local Storage/leveldb` |
 
 ---
 

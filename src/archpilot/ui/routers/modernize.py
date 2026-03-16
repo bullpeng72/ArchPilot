@@ -56,6 +56,7 @@ from archpilot.renderers.mermaid import MermaidRenderer
 from archpilot.ui import session as sess
 from archpilot.ui.helpers import _clean_json, _repair_connections, _sse, _stream_response
 from archpilot.ui.schemas import ModernizeRequest
+from archpilot.ui.stream_utils import collect_stream
 
 _log = logging.getLogger("archpilot.server")
 
@@ -368,13 +369,12 @@ async def _phase_design_perspective(
             "\n\n분석 결과 참고 (component_decisions):\n"
             + json.dumps(s.analysis.get("component_decisions", [])[:15], ensure_ascii=False)
         )
-    text = ""
-    async for chunk in client.stream_chat(
+    text = await collect_stream(
+        client,
         MULTI_PERSPECTIVE_DESIGN_PROMPT + LLM_JSON_SUFFIX,
         user_msg,
         max_tokens=MAX_PERSPECTIVE_TOKENS,
-    ):
-        text += chunk
+    )
     try:
         dp = MultiPerspectiveAnalysis.model_validate(json.loads(_clean_json(text)))
         return json.loads(dp.model_dump_json())
@@ -401,12 +401,9 @@ async def _phase_migration_plan(
         user_msg += (
             f"\n\n분석 결과:\n{json.dumps(plan_analysis, ensure_ascii=False, indent=2)}"
         )
-    text = ""
-    async for chunk in client.stream_chat(
-        MIGRATION_PLAN_PROMPT, user_msg, max_tokens=MAX_PLAN_TOKENS
-    ):
-        text += chunk
-    return text
+    return await collect_stream(
+        client, MIGRATION_PLAN_PROMPT, user_msg, max_tokens=MAX_PLAN_TOKENS
+    )
 
 
 async def _phase_rmc_rationale(
@@ -430,11 +427,12 @@ async def _phase_rmc_rationale(
                 ensure_ascii=False,
             )
         )
-    text = ""
-    async for chunk in client.stream_chat(
-        DESIGN_RATIONALE_PROMPT + LLM_JSON_SUFFIX, user_msg, max_tokens=MAX_RATIONALE_TOKENS
-    ):
-        text += chunk
+    text = await collect_stream(
+        client,
+        DESIGN_RATIONALE_PROMPT + LLM_JSON_SUFFIX,
+        user_msg,
+        max_tokens=MAX_RATIONALE_TOKENS,
+    )
     try:
         rationale = DesignRationale.model_validate(json.loads(_clean_json(text)))
         return json.loads(rationale.model_dump_json())
@@ -468,17 +466,214 @@ async def _phase_rmc_plan(
         f"{analysis_ctx}\n\n"
         f"작성한 마이그레이션 계획:\n{plan_text[:8000]}"
     )
-    text = ""
-    async for chunk in client.stream_chat(
-        MIGRATION_PLAN_RMC_PROMPT + LLM_JSON_SUFFIX, user_msg, max_tokens=MAX_RMC_TOKENS
-    ):
-        text += chunk
+    text = await collect_stream(
+        client,
+        MIGRATION_PLAN_RMC_PROMPT + LLM_JSON_SUFFIX,
+        user_msg,
+        max_tokens=MAX_RMC_TOKENS,
+    )
     try:
         plan_rmc = MigrationPlanRMC.model_validate(json.loads(_clean_json(text)))
         return json.loads(plan_rmc.model_dump_json())
     except (json.JSONDecodeError, ValueError) as e:
         _log.warning("[modernize] 마이그레이션 계획 RMC 파싱 실패 (무시): %s", e)
         return None
+
+
+# ── 현대화 스트리밍 핵심 로직 (테스트 가능하도록 라우터 외부로 분리) ──────────────
+
+async def _run_modernize(
+    req: ModernizeRequest,
+    s: "AppSession",
+    output_dir: Any,
+) -> AsyncGenerator[str, None]:
+    """modernize_stream의 실제 생성 로직.
+
+    HTTPException·Request 의존성을 제거하여 독립 테스트가 가능하다.
+    output_dir: pathlib.Path — 파일 저장 위치
+    """
+    try:
+        async with s.busy("modernize"):
+            is_patch = _is_patch_mode(req, s)
+            client = get_async_client()
+            ctx: dict = {}
+
+            if is_patch:
+                # ── 부분 수정 모드 ─────────────────────────────────────────────
+                # 시나리오는 세션에서 유지 (재평가 없음)
+                resolved_scenario = s.scenario or ModernizationScenario.FULL_REPLACE.value
+                yield _sse({"type": "progress", "pct": 5,
+                            "msg": "부분 수정 모드 — 기존 설계에 피드백을 반영합니다..."})
+                async for event in _stream_patch(client, s, req, ctx, resolved_scenario):
+                    yield event
+                scenario_label = resolved_scenario
+                try:
+                    scenario_label = ModernizationScenario(resolved_scenario).label
+                except ValueError:
+                    pass
+                legacy_comps = s.system.get("components", [])
+            else:
+                # ── 전체 재생성 모드 ───────────────────────────────────────────
+                yield _sse({"type": "progress", "pct": 5, "msg": "현대화 설계를 시작합니다..."})
+
+                resolved_scenario, scenario_label, scenario_section = _resolve_scenario(req, s)
+                legacy_comps = s.system.get("components", [])
+                legacy_conns = s.system.get("connections", [])
+
+                comp_checklist, must_include_ids, retire_ids, min_modern_comps = (
+                    build_component_checklist(s.analysis, legacy_comps)
+                )
+                retire_count = len(retire_ids)
+                analysis_section = _build_analysis_section(s, resolved_scenario)
+
+                pattern_grounding = build_pattern_grounding(s.system)
+                user_msg = (
+                    f"[레거시 규모: {len(legacy_comps)}개 컴포넌트, {len(legacy_conns)}개 연결]\n"
+                    f"[현대화 설계 최소 컴포넌트 수: {min_modern_comps}개 이상 "
+                    f"(retire {retire_count}개 제외)]\n"
+                    f"[처리 대상 컴포넌트 목록 (빠짐없이 현대화 설계에 반영할 것)]:\n"
+                    f"{comp_checklist}\n\n"
+                    f"현대화 요구사항:\n{req.requirements}"
+                    f"{scenario_section}"
+                    f"{analysis_section}"
+                    f"\n\nLegacy 시스템:\n{compress_system_dict(s.system, MAX_SYSTEM_CHARS)}"
+                    f"{pattern_grounding}"
+                )
+
+                # ── Phase ①: SystemModel 생성 ────────────────────────────────────
+                if len(legacy_comps) > LARGE_SYSTEM_THRESHOLD:
+                    lctx = _LargeCtx(
+                        resolved_scenario=resolved_scenario,
+                        legacy_comps=legacy_comps,
+                        legacy_conns=legacy_conns,
+                        comp_checklist=comp_checklist,
+                        min_modern_comps=min_modern_comps,
+                        retire_count=retire_count,
+                        analysis_section=analysis_section,
+                    )
+                    async for event in _stream_large_system(client, s, req, lctx, ctx):
+                        yield event
+                else:
+                    async for event in _stream_single_pass(
+                        client, user_msg, must_include_ids, min_modern_comps, ctx
+                    ):
+                        yield event
+
+            yield _sse({"type": "progress", "pct": 60, "msg": "시스템 모델을 파싱하고 있습니다..."})
+            modern_dict = _repair_connections(
+                json.loads(_clean_json(ctx["full_text"])), _log
+            )
+            modern_model = SystemParser()._dict_to_model(modern_dict)
+            modern_mmd = MermaidRenderer().render(modern_model)
+            modern_drawio = DrawioRenderer().render(modern_model)
+
+            # dropped connections 경고 SSE 방출
+            dropped_conns = modern_model.metadata.get("_dropped_connections")
+            if dropped_conns:
+                _log.warning("[modernize] LLM 생성 연결 %d개 드롭: %s", len(dropped_conns), dropped_conns)
+                yield _sse({
+                    "type": "warning",
+                    "msg": (
+                        f"현대화 설계에서 {len(dropped_conns)}개 연결이 "
+                        f"유효하지 않은 컴포넌트를 참조하여 제거됐습니다: "
+                        + ", ".join(dropped_conns[:5])
+                        + ("..." if len(dropped_conns) > 5 else "")
+                    ),
+                })
+
+            # missing components 경고 SSE 방출
+            missing_comps = modern_model.metadata.get("_missing_components")
+            if missing_comps:
+                yield _sse({
+                    "type": "warning",
+                    "msg": (
+                        f"재시도 후에도 {len(missing_comps)}개 컴포넌트가 누락됐습니다: "
+                        + ", ".join(missing_comps[:5])
+                        + ("..." if len(missing_comps) > 5 else "")
+                        + " 재분석 또는 수동 보정을 권장합니다."
+                    ),
+                })
+
+            # ── Phase ②: 멀티 퍼스펙티브 설계 검증 (전체 재생성 시에만) ────────
+            if not is_patch:
+                yield _sse({
+                    "type": "progress", "pct": 65,
+                    "msg": "🏛️ 8대 아키텍처 관점에서 설계안을 검증하고 있습니다...",
+                })
+                s.design_perspective = await _phase_design_perspective(
+                    client, s, req, modern_model, resolved_scenario, scenario_label
+                )
+
+            # ── Phase ③: 마이그레이션 플랜 (항상 실행 — 수정된 아키텍처 반영) ──
+            yield _sse({"type": "progress", "pct": 75, "msg": "마이그레이션 플랜을 작성하고 있습니다..."})
+            plan_text = await _phase_migration_plan(client, s, req, modern_model)
+
+            s.modern = json.loads(modern_model.model_dump_json())
+            s.modern_mmd = modern_mmd
+            s.modern_drawio = modern_drawio
+            s.migration_plan = plan_text
+
+            # 부분 수정 이력 기록
+            if is_patch and req.feedback:
+                s.last_feedback = req.feedback
+                s.patch_history.append(req.feedback)
+
+            # ── Phase ④: RMC 설계 해설 (전체 재생성 시에만) ─────────────────
+            if not is_patch:
+                yield _sse({"type": "progress", "pct": 88,
+                            "msg": "🧠 RMC: 설계 해설을 작성하고 있습니다..."})
+                s.design_rationale = await _phase_rmc_rationale(
+                    client, s, req, resolved_scenario
+                )
+
+                # ── Phase ⑤: RMC 마이그레이션 계획 자기평가 ─────────────────
+                yield _sse({
+                    "type": "progress", "pct": 95,
+                    "msg": "🧠 RMC: 마이그레이션 계획을 자기검토하고 있습니다...",
+                })
+                s.migration_plan_rmc = await _phase_rmc_plan(
+                    client, s, resolved_scenario, legacy_comps, plan_text
+                )
+
+            # ── 파일 저장 (블로킹 I/O → 스레드 오프로드) ─────────────────────
+            modern_dir = output_dir / "modern"
+            design_rationale_json = (
+                json.dumps(s.design_rationale, ensure_ascii=False, indent=2)
+                if s.design_rationale else None
+            )
+
+            def _write_modern_files() -> None:
+                modern_dir.mkdir(exist_ok=True)
+                (modern_dir / "system.json").write_text(
+                    modern_model.model_dump_json(indent=2), encoding="utf-8"
+                )
+                (modern_dir / "diagram.mmd").write_text(modern_mmd, encoding="utf-8")
+                (modern_dir / "diagram.drawio").write_text(modern_drawio, encoding="utf-8")
+                (modern_dir / "migration_plan.md").write_text(plan_text, encoding="utf-8")
+                if design_rationale_json:
+                    (modern_dir / "design_rationale.json").write_text(
+                        design_rationale_json, encoding="utf-8"
+                    )
+
+            await asyncio.to_thread(_write_modern_files)
+
+            yield _sse({
+                "type": "done",
+                "modern": s.modern,
+                "modern_mmd": modern_mmd,
+                "modern_drawio": modern_drawio,
+                "migration_plan": plan_text,
+                "scenario": resolved_scenario,
+                "design_rationale": s.design_rationale,
+                "migration_plan_rmc": s.migration_plan_rmc,
+                "design_perspective": s.design_perspective,
+                "patch_mode": is_patch,
+                "feedback": req.feedback if is_patch else None,
+            })
+
+    except Exception as e:
+        _log.exception("[modernize] 오류: %s", e)
+        yield _sse({"type": "error", "msg": str(e)})
 
 
 # ── POST /api/modernize/stream ────────────────────────────────────────────────
@@ -490,190 +685,5 @@ async def modernize_stream(req: ModernizeRequest, request: Request) -> Streaming
         raise HTTPException(status_code=400, detail="먼저 시스템을 주입하세요")
 
     s.requirements = req.requirements
-
-    async def generator() -> AsyncGenerator[str, None]:
-        try:
-            with s.busy("modernize"):
-                is_patch = _is_patch_mode(req, s)
-                client = get_async_client()
-                ctx: dict = {}
-
-                if is_patch:
-                    # ── 부분 수정 모드 ─────────────────────────────────────────────
-                    # 시나리오는 세션에서 유지 (재평가 없음)
-                    resolved_scenario = s.scenario or ModernizationScenario.FULL_REPLACE.value
-                    yield _sse({"type": "progress", "pct": 5,
-                                "msg": "부분 수정 모드 — 기존 설계에 피드백을 반영합니다..."})
-                    async for event in _stream_patch(client, s, req, ctx, resolved_scenario):
-                        yield event
-                    scenario_label = resolved_scenario
-                    try:
-                        scenario_label = ModernizationScenario(resolved_scenario).label
-                    except ValueError:
-                        pass
-                    legacy_comps = s.system.get("components", [])
-                else:
-                    # ── 전체 재생성 모드 ───────────────────────────────────────────
-                    yield _sse({"type": "progress", "pct": 5, "msg": "현대화 설계를 시작합니다..."})
-
-                    resolved_scenario, scenario_label, scenario_section = _resolve_scenario(req, s)
-                    legacy_comps = s.system.get("components", [])
-                    legacy_conns = s.system.get("connections", [])
-
-                    comp_checklist, must_include_ids, retire_ids, min_modern_comps = (
-                        build_component_checklist(s.analysis, legacy_comps)
-                    )
-                    retire_count = len(retire_ids)
-                    analysis_section = _build_analysis_section(s, resolved_scenario)
-
-                    pattern_grounding = build_pattern_grounding(s.system)
-                    user_msg = (
-                        f"[레거시 규모: {len(legacy_comps)}개 컴포넌트, {len(legacy_conns)}개 연결]\n"
-                        f"[현대화 설계 최소 컴포넌트 수: {min_modern_comps}개 이상 "
-                        f"(retire {retire_count}개 제외)]\n"
-                        f"[처리 대상 컴포넌트 목록 (빠짐없이 현대화 설계에 반영할 것)]:\n"
-                        f"{comp_checklist}\n\n"
-                        f"현대화 요구사항:\n{req.requirements}"
-                        f"{scenario_section}"
-                        f"{analysis_section}"
-                        f"\n\nLegacy 시스템:\n{compress_system_dict(s.system, MAX_SYSTEM_CHARS)}"
-                        f"{pattern_grounding}"
-                    )
-
-                    # ── Phase ①: SystemModel 생성 ────────────────────────────────────
-                    if len(legacy_comps) > LARGE_SYSTEM_THRESHOLD:
-                        lctx = _LargeCtx(
-                            resolved_scenario=resolved_scenario,
-                            legacy_comps=legacy_comps,
-                            legacy_conns=legacy_conns,
-                            comp_checklist=comp_checklist,
-                            min_modern_comps=min_modern_comps,
-                            retire_count=retire_count,
-                            analysis_section=analysis_section,
-                        )
-                        async for event in _stream_large_system(client, s, req, lctx, ctx):
-                            yield event
-                    else:
-                        async for event in _stream_single_pass(
-                            client, user_msg, must_include_ids, min_modern_comps, ctx
-                        ):
-                            yield event
-
-                yield _sse({"type": "progress", "pct": 60, "msg": "시스템 모델을 파싱하고 있습니다..."})
-                modern_dict = _repair_connections(
-                    json.loads(_clean_json(ctx["full_text"])), _log
-                )
-                modern_model = SystemParser()._dict_to_model(modern_dict)
-                modern_mmd = MermaidRenderer().render(modern_model)
-                modern_drawio = DrawioRenderer().render(modern_model)
-
-                # dropped connections 경고 SSE 방출
-                dropped_conns = modern_model.metadata.get("_dropped_connections")
-                if dropped_conns:
-                    _log.warning("[modernize] LLM 생성 연결 %d개 드롭: %s", len(dropped_conns), dropped_conns)
-                    yield _sse({
-                        "type": "warning",
-                        "msg": (
-                            f"현대화 설계에서 {len(dropped_conns)}개 연결이 "
-                            f"유효하지 않은 컴포넌트를 참조하여 제거됐습니다: "
-                            + ", ".join(dropped_conns[:5])
-                            + ("..." if len(dropped_conns) > 5 else "")
-                        ),
-                    })
-
-                # missing components 경고 SSE 방출
-                missing_comps = modern_model.metadata.get("_missing_components")
-                if missing_comps:
-                    yield _sse({
-                        "type": "warning",
-                        "msg": (
-                            f"재시도 후에도 {len(missing_comps)}개 컴포넌트가 누락됐습니다: "
-                            + ", ".join(missing_comps[:5])
-                            + ("..." if len(missing_comps) > 5 else "")
-                            + " 재분석 또는 수동 보정을 권장합니다."
-                        ),
-                    })
-
-                # ── Phase ②: 멀티 퍼스펙티브 설계 검증 (전체 재생성 시에만) ────────
-                if not is_patch:
-                    yield _sse({
-                        "type": "progress", "pct": 65,
-                        "msg": "🏛️ 8대 아키텍처 관점에서 설계안을 검증하고 있습니다...",
-                    })
-                    s.design_perspective = await _phase_design_perspective(
-                        client, s, req, modern_model, resolved_scenario, scenario_label
-                    )
-
-                # ── Phase ③: 마이그레이션 플랜 (항상 실행 — 수정된 아키텍처 반영) ──
-                yield _sse({"type": "progress", "pct": 75, "msg": "마이그레이션 플랜을 작성하고 있습니다..."})
-                plan_text = await _phase_migration_plan(client, s, req, modern_model)
-
-                s.modern = json.loads(modern_model.model_dump_json())
-                s.modern_mmd = modern_mmd
-                s.modern_drawio = modern_drawio
-                s.migration_plan = plan_text
-
-                # 부분 수정 이력 기록
-                if is_patch and req.feedback:
-                    s.last_feedback = req.feedback
-                    s.patch_history.append(req.feedback)
-
-                # ── Phase ④: RMC 설계 해설 (전체 재생성 시에만) ─────────────────
-                if not is_patch:
-                    yield _sse({"type": "progress", "pct": 88,
-                                "msg": "🧠 RMC: 설계 해설을 작성하고 있습니다..."})
-                    s.design_rationale = await _phase_rmc_rationale(
-                        client, s, req, resolved_scenario
-                    )
-
-                    # ── Phase ⑤: RMC 마이그레이션 계획 자기평가 ─────────────────
-                    yield _sse({
-                        "type": "progress", "pct": 95,
-                        "msg": "🧠 RMC: 마이그레이션 계획을 자기검토하고 있습니다...",
-                    })
-                    s.migration_plan_rmc = await _phase_rmc_plan(
-                        client, s, resolved_scenario, legacy_comps, plan_text
-                    )
-
-                # ── 파일 저장 (블로킹 I/O → 스레드 오프로드) ─────────────────────
-                output_dir = request.app.state.output_dir
-                modern_dir = output_dir / "modern"
-                design_rationale_json = (
-                    json.dumps(s.design_rationale, ensure_ascii=False, indent=2)
-                    if s.design_rationale else None
-                )
-
-                def _write_modern_files() -> None:
-                    modern_dir.mkdir(exist_ok=True)
-                    (modern_dir / "system.json").write_text(
-                        modern_model.model_dump_json(indent=2), encoding="utf-8"
-                    )
-                    (modern_dir / "diagram.mmd").write_text(modern_mmd, encoding="utf-8")
-                    (modern_dir / "diagram.drawio").write_text(modern_drawio, encoding="utf-8")
-                    (modern_dir / "migration_plan.md").write_text(plan_text, encoding="utf-8")
-                    if design_rationale_json:
-                        (modern_dir / "design_rationale.json").write_text(
-                            design_rationale_json, encoding="utf-8"
-                        )
-
-                await asyncio.to_thread(_write_modern_files)
-
-                yield _sse({
-                    "type": "done",
-                    "modern": s.modern,
-                    "modern_mmd": modern_mmd,
-                    "modern_drawio": modern_drawio,
-                    "migration_plan": plan_text,
-                    "scenario": resolved_scenario,
-                    "design_rationale": s.design_rationale,
-                    "migration_plan_rmc": s.migration_plan_rmc,
-                    "design_perspective": s.design_perspective,
-                    "patch_mode": is_patch,
-                    "feedback": req.feedback if is_patch else None,
-                })
-
-        except Exception as e:
-            _log.exception("[modernize] 오류: %s", e)
-            yield _sse({"type": "error", "msg": str(e)})
-
-    return await _stream_response(generator())
+    output_dir = request.app.state.output_dir
+    return await _stream_response(_run_modernize(req, s, output_dir))

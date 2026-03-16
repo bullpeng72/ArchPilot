@@ -9,6 +9,25 @@ from typing import AsyncGenerator
 from fastapi.responses import StreamingResponse
 
 
+_JSON_STRING_RE = re.compile(r'"(?:[^"\\]|\\.)*"', re.DOTALL)
+
+_CTRL_ESCAPE: dict[str, str] = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _escape_ctrl_in_string(m: re.Match) -> str:
+    """JSON 문자열 내부의 제어 문자를 이스케이프 시퀀스로 변환."""
+    inner = m.group()[1:-1]  # 따옴표 제외
+    out: list[str] = []
+    for ch in inner:
+        if ch in _CTRL_ESCAPE:
+            out.append(_CTRL_ESCAPE[ch])
+        elif ord(ch) < 0x20:
+            pass  # 그 외 제어 문자 제거
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
+
+
 def _clean_json(text: str) -> str:
     """LLM 스트리밍 응답에서 마크다운 코드 펜스 제거 + JSON 정규화."""
     text = text.strip()
@@ -23,6 +42,8 @@ def _clean_json(text: str) -> str:
         text = text[start : end + 1]
     # 후행 쉼표 제거: ,} 또는 ,] (LLM이 JS 스타일로 생성할 때 발생)
     text = re.sub(r",\s*([}\]])", r"\1", text)
+    # JSON 문자열 내부의 제어 문자 이스케이프 (LLM이 리터럴 개행 등을 포함할 때)
+    text = _JSON_STRING_RE.sub(_escape_ctrl_in_string, text)
     return text
 
 

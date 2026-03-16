@@ -279,7 +279,9 @@
     .rs {
       border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
+    [x-cloak] { display: none !important; }
     .rs.locked .rs-header { opacity: .45; cursor: default; pointer-events: none; }
+    .rs.locked .rs-body { display: none !important; }
     .rs-header {
       display: flex; align-items: center; gap: 7px;
       padding: 8px 12px; cursor: pointer; user-select: none;
@@ -659,20 +661,52 @@
       background: var(--border); border-radius: 3px;
       padding: 0 3px; font-size: 10px; font-family: monospace;
     }
-    /* CSS 도형 프리뷰 */
+    /* CSS 도형 프리뷰 — STYLE_MAP 색상과 동기화 */
     .aps { display: block; }
-    .aps-server   { width:44px; height:24px; background:#dae8fc; border:2px solid #6c8ebf; border-radius:3px; }
-    .aps-database { width:28px; height:36px; background:#f8cecc; border:2px solid #b85450;
-                    border-radius:50% 50% 3px 3px / 8px 8px 3px 3px; }
-    .aps-cache    { width:44px; height:22px; background:#fff2cc; border:2px solid #d6b656; border-radius:11px; }
-    .aps-queue    { width:44px; height:24px; background:#ffe6cc; border:2px solid #d79b00; border-radius:3px; }
-    .aps-storage  { width:20px; height:32px; background:#036897; border:2px solid #024d73; border-radius:2px; }
-    .aps-cdn      { width:44px; height:22px; background:#d5e8d4; border:2px solid #82b366; border-radius:11px; }
-    .aps-lb       { width:24px; height:24px; background:#f0a30a; border:2px solid #BD7000;
-                    border-radius:2px; transform:rotate(45deg); }
-    .aps-gateway  { width:44px; height:22px; background:#e1d5e7; border:2px solid #9673a6; border-radius:11px; }
-    .aps-service  { width:44px; height:24px; background:#d5e8d4; border:2px solid #82b366; border-radius:3px; }
-    .aps-client   { width:36px; height:28px; background:#f0f0f0; border:2px solid #888; border-radius:2px; }
+    /* ── 기본 컴포넌트 ── */
+    .aps-server      { width:44px; height:24px; background:#dae8fc; border:2px solid #6c8ebf; border-radius:3px; }
+    .aps-database    { width:28px; height:32px; background:#f5f5f5; border:2px solid #666666;
+                       border-radius:50% 50% 3px 3px / 8px 8px 3px 3px; }
+    .aps-cache       { width:44px; height:22px; background:#fff2cc; border:2px solid #d6b656; border-radius:11px; }
+    .aps-queue       { width:44px; height:24px; background:#ffe6cc; border:2px solid #d79b00; border-radius:0 12px 12px 0; }
+    .aps-storage     { width:24px; height:32px; background:#f5f5f5; border:2px solid #666666;
+                       border-radius:3px 3px 8px 8px; }
+    .aps-cdn         { width:44px; height:22px; background:#d5e8d4; border:2px solid #82b366; border-radius:11px; }
+    .aps-lb          { width:24px; height:24px; background:#f8cecc; border:2px solid #b85450;
+                       border-radius:2px; transform:rotate(45deg); }
+    .aps-gateway     { width:44px; height:22px; background:#e1d5e7; border:2px solid #9673a6; border-radius:11px; }
+    .aps-service     { width:44px; height:24px; background:#d5e8d4; border:2px solid #82b366; border-radius:3px; }
+    .aps-client      { width:36px; height:28px; background:#f5f5f5; border:2px solid #666666; border-radius:2px; }
+    /* ── 엔터프라이즈 컴포넌트 ── */
+    .aps-mainframe   { width:44px; height:28px; background:#ccccff; border:2px solid #3333cc; border-radius:1px; }
+    .aps-esb         { width:44px; height:22px; background:#f0d0ff; border:2px solid #9933cc; border-radius:8px; }
+    .aps-security    { width:24px; height:24px; background:#ffe6e6; border:2px solid #cc0000;
+                       border-radius:2px; transform:rotate(45deg); }
+    .aps-monitoring  { width:44px; height:22px; background:#fffacd; border:2px solid #d4ac0d; border-radius:11px; }
+    .aps-unknown     { width:44px; height:24px; background:#f5f5f5; border:2px solid #999999; border-radius:3px; }
+    /* ── 호스트 환경 Swimlane 컨테이너 ── */
+    .ap-section-hdr  {
+      font-size:9.5px; font-weight:700; color:var(--muted); text-transform:uppercase;
+      letter-spacing:0.5px; padding:7px 10px 3px; margin-top:4px;
+      border-top:1px solid var(--border); flex-shrink:0;
+    }
+    .aps-swim        {
+      width:42px; height:28px; border-radius:3px; position:relative; overflow:hidden;
+    }
+    .aps-swim::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:9px;
+    }
+    /* host-specific header bar color */
+    .aps-host-onpremise { background:#E6E6E6; border:2px solid #666666; }
+    .aps-host-onpremise::before { background:#666666; }
+    .aps-host-aws       { background:#FFE6CC; border:2px solid #d79b00; }
+    .aps-host-aws::before { background:#d79b00; }
+    .aps-host-gcp       { background:#E8F0FE; border:2px solid #4285F4; }
+    .aps-host-gcp::before { background:#4285F4; }
+    .aps-host-azure     { background:#CCE5F5; border:2px solid #0078D4; }
+    .aps-host-azure::before { background:#0078D4; }
+    .aps-host-hybrid    { background:#d5e8d4; border:2px solid #82b366; }
+    .aps-host-hybrid::before { background:#82b366; }
 
     /* ── AI 채팅 ─────────────────────────────────────────────────── */
     .chat-messages {
@@ -1088,17 +1122,20 @@
         <div class="ap-guide-title">🧩 ArchPilot 컴포넌트</div>
 
         <template x-for="s in _DRAWIO_SHAPES" :key="s.type">
-          <div class="ap-shape-row"
-               @click="copyShapeStyle(s.style, s.name)"
-               :title="s.name + ' 스타일 복사'">
-            <div class="ap-preview">
-              <span class="aps" :class="'aps-' + s.type"></span>
+          <!-- x-for 단일 루트 + x-show로 분기 (x-if 중첩 금지) -->
+          <div :class="s.divider ? 'ap-section-hdr' : 'ap-shape-row'"
+               @click="!s.divider && s.style && copyShapeStyle(s.style, s.name)"
+               :title="!s.divider ? s.name + ' 스타일 복사' : ''">
+            <span x-show="s.divider" x-text="s.name"></span>
+            <div class="ap-preview" x-show="!s.divider">
+              <span class="aps"
+                :class="s.swimType ? 'aps-swim aps-host-' + s.swimType : 'aps-' + s.type"></span>
             </div>
-            <div class="ap-info">
+            <div class="ap-info" x-show="!s.divider">
               <div class="ap-name" x-text="s.name"></div>
               <div class="ap-hint" x-text="s.hint"></div>
             </div>
-            <div class="ap-copy">📋</div>
+            <div class="ap-copy" x-show="!s.divider">📋</div>
           </div>
         </template>
 
@@ -1227,7 +1264,7 @@
         <template x-if="!state.system"><span class="rs-lock">🔒</span></template>
         <template x-if="state.system"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.summary">
+      <div class="rs-body" x-show="reportSections.summary && !!state.system">
         <template x-if="state.system">
           <div>
             <div class="kv-grid" style="margin-bottom:10px;">
@@ -1271,7 +1308,7 @@
         <template x-if="!state.analysis"><span class="rs-lock">🔒</span></template>
         <template x-if="state.analysis"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.analysis">
+      <div class="rs-body" x-cloak x-show="reportSections.analysis">
         <template x-if="state.analysis">
           <div style="display:flex; flex-direction:column; gap:18px;">
 
@@ -1477,7 +1514,7 @@
         <template x-if="!state.multi_perspective"><span class="rs-lock">🔒</span></template>
         <template x-if="state.multi_perspective"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.perspectives">
+      <div class="rs-body" x-cloak x-show="reportSections.perspectives">
         <template x-if="state.multi_perspective">
           <div style="display:flex; flex-direction:column; gap:10px; padding:8px 0;">
 
@@ -1596,7 +1633,7 @@
         <template x-if="!state.analysis_rmc"><span class="rs-lock">🔒</span></template>
         <template x-if="state.analysis_rmc"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.rmc_analysis">
+      <div class="rs-body" x-cloak x-show="reportSections.rmc_analysis">
         <template x-if="state.analysis_rmc">
           <div style="display:flex; flex-direction:column; gap:18px;">
 
@@ -1668,7 +1705,7 @@
         <template x-if="!state.modern"><span class="rs-lock">🔒</span></template>
         <template x-if="state.modern"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.diff">
+      <div class="rs-body" x-cloak x-show="reportSections.diff">
         <template x-if="diff">
           <div style="display:flex; flex-direction:column; gap:12px;">
 
@@ -1777,7 +1814,7 @@
         <template x-if="!state.design_perspective"><span class="rs-lock">🔒</span></template>
         <template x-if="state.design_perspective"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.design_perspectives">
+      <div class="rs-body" x-cloak x-show="reportSections.design_perspectives">
         <template x-if="state.design_perspective">
           <div style="display:flex; flex-direction:column; gap:10px; padding:8px 0;">
 
@@ -1905,7 +1942,7 @@
         <template x-if="!state.design_rationale"><span class="rs-lock">🔒</span></template>
         <template x-if="state.design_rationale"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.rationale">
+      <div class="rs-body" x-cloak x-show="reportSections.rationale">
         <template x-if="state.design_rationale">
           <div style="display:flex; flex-direction:column; gap:20px;">
 
@@ -2121,7 +2158,7 @@
     </div>
 
     <!-- ⑥ 마이그레이션 계획 -->
-    <div class="rs" :class="{locked: !state.migration_plan}">
+    <div class="rs locked" :class="{locked: !state.migration_plan}">
       <div class="rs-header" :class="{open: reportSections.plan}"
            @click="toggleSection('plan', !!state.migration_plan)">
         <span class="rs-icon">🗺️</span>
@@ -2130,13 +2167,15 @@
         <template x-if="!state.migration_plan"><span class="rs-lock">🔒</span></template>
         <template x-if="state.migration_plan"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.plan">
-        <div class="migration-box" x-text="state.migration_plan"></div>
-      </div>
+      <template x-if="reportSections.plan && !!state.migration_plan">
+        <div class="rs-body">
+          <div class="migration-box" x-text="state.migration_plan"></div>
+        </div>
+      </template>
     </div>
 
     <!-- ⑦ 📋 계획 RMC -->
-    <div class="rs" :class="{locked: !state.migration_plan_rmc}">
+    <div class="rs locked" :class="{locked: !state.migration_plan_rmc}">
       <div class="rs-header" :class="{open: reportSections.plan_rmc}"
            @click="toggleSection('plan_rmc', !!state.migration_plan_rmc)">
         <span class="rs-icon">📋</span>
@@ -2145,8 +2184,8 @@
         <template x-if="!state.migration_plan_rmc"><span class="rs-lock">🔒</span></template>
         <template x-if="state.migration_plan_rmc"><span class="rs-chevron">▼</span></template>
       </div>
-      <div class="rs-body" x-show="reportSections.plan_rmc">
-        <template x-if="state.migration_plan_rmc">
+      <template x-if="reportSections.plan_rmc && !!state.migration_plan_rmc">
+        <div class="rs-body">
           <div style="display:flex; flex-direction:column; gap:16px;">
 
             <div style="padding:12px; background:var(--bg3); border-radius:8px;">
@@ -2238,8 +2277,8 @@
             </template>
 
           </div>
-        </template>
-      </div>
+        </div>
+      </template>
     </div>
 
   </div><!-- /report-panel-body -->
@@ -2385,87 +2424,124 @@
     <!-- ③ 편집기 사용법 -->
     <template x-if="helpTab==='editor'">
       <div style="display:flex; flex-direction:column; gap:16px;">
+
         <div class="help-section">
-          <h3>전체 흐름</h3>
+          <h3>편집기 기본 흐름</h3>
           <ol style="font-size:13px; line-height:1.9; color:var(--muted); padding-left:1.4em;">
-            <li><strong>🖊 편집</strong> 탭 클릭 → diagrams.net 편집기가 우측에 로드됩니다</li>
+            <li><strong>🖊 편집</strong> 탭 클릭 → 좌측 컴포넌트 패널 + 우측 diagrams.net 편집기 로드</li>
             <li>기존 시스템이 있으면 현재 다이어그램이 <strong>자동으로 불러와집니다</strong></li>
-            <li>캔버스에서 컴포넌트·연결을 자유롭게 편집합니다</li>
-            <li>완료 후 상단 <strong>Save</strong> 버튼 클릭 → ArchPilot이 자동 반영합니다</li>
+            <li>좌측 패널 도형 클릭 → 스타일 복사 → 편집기에서 도형 우클릭 → <kbd>Edit Style</kbd> → 붙여넣기</li>
+            <li>완료 후 상단 <strong>Save</strong> 버튼 또는 <code>Ctrl+S</code> → ArchPilot이 자동으로 system.json 갱신</li>
           </ol>
         </div>
 
         <div class="help-section">
-          <h3>주요 인터랙션</h3>
+          <h3>draw.io Desktop 파일 불러오기</h3>
+          <p>draw.io Desktop에서 작성한 <code>.drawio</code> 파일을 ArchPilot에서 활용하는 두 가지 방법:</p>
           <table class="help-table">
-            <thead><tr><th>행위</th><th>동작</th></tr></thead>
+            <thead><tr><th>방법</th><th>절차</th><th>추천 상황</th></tr></thead>
             <tbody>
-              <tr><td>빈 캔버스 더블클릭</td><td>새 컴포넌트(기본 사각형) 즉시 생성</td></tr>
-              <tr><td>노드 가장자리 호버 → 드래그</td><td>두 컴포넌트 간 연결선 생성</td></tr>
-              <tr><td>노드 / 연결선 더블클릭</td><td>레이블 인라인 편집</td></tr>
-              <tr><td>노드 우클릭</td><td>컨텍스트 메뉴 (스타일 변경, 삭제, 복사 등)</td></tr>
-              <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>실행 취소 / 재실행</td></tr>
-              <tr><td><code>Delete</code> 키</td><td>선택된 요소 삭제</td></tr>
-              <tr><td><code>Ctrl+S</code></td><td>저장 (ArchPilot에 반영)</td></tr>
+              <tr>
+                <td><strong>① CLI 명령어</strong></td>
+                <td>터미널에서 <code>archpilot ingest 파일.drawio</code> 실행 → output/system.json 자동 생성 → <code>archpilot serve</code></td>
+                <td>이미 완성된 .drawio 파일이 있을 때 가장 빠름</td>
+              </tr>
+              <tr>
+                <td><strong>② 웹 UI 업로드</strong></td>
+                <td>📄 구조화 탭 → <strong>파일 업로드</strong> 버튼 → .drawio 파일 선택</td>
+                <td>브라우저에서 바로 처리하고 싶을 때</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="help-tip" style="margin-top:10px;">
+            💡 draw.io Desktop에서 <strong>ArchPilot 라이브러리 도형</strong>과 <strong>호스트 Swimlane</strong>을 사용하면 불러올 때 컴포넌트 타입과 호스트 환경이 자동으로 정확하게 인식됩니다.<br>
+            먼저 <code>archpilot drawio setup</code>을 실행하면 Desktop에 ArchPilot 라이브러리가 설치됩니다.
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>편집 후 표준 YAML 보완 방법</h3>
+          <p>비주얼 편집기로 컴포넌트 구성을 그린 뒤, AI 분석 품질을 높이려면 <strong>메타데이터를 보완</strong>해야 합니다.</p>
+          <ol style="font-size:13px; line-height:1.8; color:var(--muted); padding-left:1.4em;">
+            <li>편집기 Save → system.json 자동 생성 (id, type, label, host 기본값만 포함)</li>
+            <li><strong>📄 구조화 탭</strong>으로 전환 → 생성된 YAML 확인</li>
+            <li>아래 항목을 직접 추가하거나, <strong>💬 AI 대화</strong> 탭에서 AI에게 채워달라고 요청:</li>
+          </ol>
+          <table class="help-table" style="margin-top:8px;">
+            <thead><tr><th>보완 항목</th><th>YAML 키</th><th>AI 분석 효과</th></tr></thead>
+            <tbody>
+              <tr><td>기술 버전</td><td><code>tech: [Java EE 6, Oracle 11g]</code></td><td>EOL 판단 + 기술 부채 정량화</td></tr>
+              <tr><td>구축 연도</td><td><code>vintage: 2008</code></td><td>레거시 정도 자동 계산</td></tr>
+              <tr><td>비즈니스 중요도</td><td><code>criticality: high</code></td><td>마이그레이션 우선순위 가중치</td></tr>
+              <tr><td>생명주기 상태</td><td><code>lifecycle_status: eol</code></td><td>즉시 교체 대상으로 강조</td></tr>
+              <tr><td>알려진 문제</td><td>시스템 <code>known_issues</code> 목록</td><td>pain point 최우선 반영</td></tr>
+              <tr><td>규제 요건</td><td><code>compliance: [PCI-DSS]</code></td><td>마이그레이션 하드 제약 생성</td></tr>
+              <tr><td>담당팀</td><td><code>owner: 결제플랫폼팀</code></td><td>마이그레이션 책임 구조 반영</td></tr>
             </tbody>
           </table>
         </div>
 
         <div class="help-section">
-          <h3>🧩 ArchPilot 전용 도형 라이브러리</h3>
-          <p>편집기 좌측 패널의 <strong>ArchPilot</strong> 탭에서 컴포넌트 타입별 도형을 드래그해 사용하세요. 아래 도형은 저장 시 ComponentType이 자동으로 정확하게 인식됩니다.</p>
+          <h3>🧩 ArchPilot 전용 도형 — 15종 컴포넌트 + 5종 Swimlane</h3>
+          <p>좌측 패널 또는 draw.io Desktop ArchPilot 라이브러리에서 사용. 저장 시 타입이 자동 인식됩니다.</p>
           <table class="help-table">
-            <thead><tr><th>컴포넌트 타입</th><th>도형 모양</th><th>색상 / 스타일 특징</th><th>대표 기술</th></tr></thead>
+            <thead><tr><th>타입</th><th>색상 / 모양</th><th>대표 기술</th></tr></thead>
             <tbody>
-              <tr><td><strong>Server</strong></td><td>파란 둥근 사각형</td><td>fillColor=#dae8fc</td><td>Web Server, App Server</td></tr>
-              <tr><td><strong>Database</strong></td><td>실린더 (원통)</td><td>shape=cylinder*, 또는 disk_storage</td><td>MySQL, Oracle, PostgreSQL</td></tr>
-              <tr><td><strong>Cache</strong></td><td>노란 타원</td><td>ellipse + fillColor=#fff2cc</td><td>Redis, Memcached</td></tr>
-              <tr><td><strong>Queue</strong></td><td>Flowchart delay 도형</td><td>shape=mxgraph.flowchart.delay + fillColor=#ffe6cc</td><td>Kafka, RabbitMQ, SQS</td></tr>
-              <tr><td><strong>Storage</strong></td><td>Flowchart stored_data 도형</td><td>shape=mxgraph.flowchart.stored_data + fillColor=#f5f5f5</td><td>S3, NAS, 파일 서버</td></tr>
-              <tr><td><strong>CDN</strong></td><td>초록 타원</td><td>ellipse + fillColor=#d5e8d4</td><td>CloudFront, Akamai</td></tr>
-              <tr><td><strong>Load Balancer</strong></td><td>분홍 마름모</td><td>shape=rhombus + fillColor=#f8cecc</td><td>ELB, ALB, Nginx LB</td></tr>
-              <tr><td><strong>Gateway</strong></td><td>보라 라운드 캡슐</td><td>arcSize=50 + fillColor=#e1d5e7</td><td>API Gateway, Kong</td></tr>
-              <tr><td><strong>Service</strong></td><td>초록 둥근 사각형</td><td>fillColor=#d5e8d4</td><td>마이크로서비스</td></tr>
-              <tr><td><strong>Client</strong></td><td>Cisco PC 아이콘</td><td>shape=mxgraph.cisco.computers.*</td><td>웹/모바일 클라이언트</td></tr>
-              <tr><td><strong>Mainframe</strong></td><td>남보라 직각 사각형</td><td>rounded=0 + fillColor=#ccccff + fontStyle=1</td><td>IBM z/OS, 메인프레임</td></tr>
-              <tr><td><strong>ESB</strong></td><td>연보라 둥근 사각형</td><td>arcSize=30 + fillColor=#f0d0ff</td><td>IBM MQ, TIBCO, MuleSoft</td></tr>
-              <tr><td><strong>Security</strong></td><td>연빨강 마름모 (결정 기호)</td><td>shape=mxgraph.flowchart.decision + fillColor=#ffe6e6</td><td>WAF, Vault, IAM</td></tr>
-              <tr><td><strong>Monitoring</strong></td><td>연노랑 둥근 사각형</td><td>rounded=1 + fillColor=#fffacd</td><td>Grafana, CloudWatch, Prometheus</td></tr>
+              <tr><td><strong>Server</strong></td><td>파란 둥근 사각형 (#dae8fc)</td><td>Web Server, App Server, WAS</td></tr>
+              <tr><td><strong>Database</strong></td><td>회색 실린더 (flowchart.database)</td><td>MySQL, Oracle, PostgreSQL</td></tr>
+              <tr><td><strong>Cache</strong></td><td>노란 타원 (#fff2cc)</td><td>Redis, Memcached, Hazelcast</td></tr>
+              <tr><td><strong>Queue</strong></td><td>주황 화살 도형 (flowchart.delay)</td><td>Kafka, RabbitMQ, SQS, ActiveMQ</td></tr>
+              <tr><td><strong>Storage</strong></td><td>회색 저장 도형 (flowchart.stored_data)</td><td>S3, NAS, NFS, 파일 서버</td></tr>
+              <tr><td><strong>CDN</strong></td><td>초록 타원 (#d5e8d4)</td><td>CloudFront, Akamai, Fastly</td></tr>
+              <tr><td><strong>Load Balancer</strong></td><td>분홍 마름모 (#f8cecc)</td><td>ELB, ALB, Nginx LB, HAProxy</td></tr>
+              <tr><td><strong>Gateway</strong></td><td>보라 캡슐형 (arcSize=50, #e1d5e7)</td><td>API Gateway, Kong, Zuul</td></tr>
+              <tr><td><strong>Service</strong></td><td>초록 둥근 사각형 (#d5e8d4)</td><td>마이크로서비스, 내부 서비스</td></tr>
+              <tr><td><strong>Client</strong></td><td>회색 terminator (flowchart.terminator)</td><td>웹/모바일 클라이언트, SPA</td></tr>
+              <tr><td><strong>Mainframe</strong></td><td>남보라 직각 사각형 (#ccccff)</td><td>IBM z/OS, COBOL 배치</td></tr>
+              <tr><td><strong>ESB</strong></td><td>연보라 둥근 사각형 (arcSize=30, #f0d0ff)</td><td>IBM MQ, TIBCO, MuleSoft</td></tr>
+              <tr><td><strong>Security</strong></td><td>연빨강 마름모 (flowchart.decision, #ffe6e6)</td><td>WAF, IAM, HSM, Firewall</td></tr>
+              <tr><td><strong>Monitoring</strong></td><td>연노랑 둥근 사각형 (#fffacd)</td><td>Grafana, Prometheus, CloudWatch</td></tr>
+              <tr><td><strong>Unknown</strong></td><td>회색 둥근 사각형 (기본)</td><td>미분류 / 추후 확인 필요</td></tr>
             </tbody>
           </table>
-          <p style="margin-top:8px; font-size:12px; color:var(--muted);">
-            ⚠️ <strong>일반 도형 사용 시 주의</strong>: ArchPilot 라이브러리 외의 도형은 스타일이 인식되지 않아 모두 <code>Server</code>로 분류됩니다.<br>
-            특히 색상 없는 타원(ellipse), 사각형(rectangle), AWS 기본 라이브러리 아이콘은 정확한 타입 인식이 보장되지 않습니다.
-          </p>
+          <table class="help-table" style="margin-top:10px;">
+            <thead><tr><th>Swimlane</th><th>헤더 색상</th><th>인식 결과 (host)</th></tr></thead>
+            <tbody>
+              <tr><td><strong>On-Premise</strong></td><td>회색 (#666666)</td><td><code>on-premise</code></td></tr>
+              <tr><td><strong>AWS Cloud</strong></td><td>주황 (#d79b00)</td><td><code>aws</code></td></tr>
+              <tr><td><strong>GCP Cloud</strong></td><td>파랑 (#4285F4)</td><td><code>gcp</code></td></tr>
+              <tr><td><strong>Azure Cloud</strong></td><td>하늘 (#0078D4)</td><td><code>azure</code></td></tr>
+              <tr><td><strong>Hybrid</strong></td><td>초록 (#82b366)</td><td><code>hybrid</code></td></tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="help-section">
           <h3>레이블 형식 — ArchPilot 파싱 규칙</h3>
-          <p>노드 레이블의 <strong>첫 줄 = 컴포넌트명</strong>, 이후 줄 = 기술 스택으로 파싱됩니다.</p>
+          <p><strong>첫 줄 = 컴포넌트명</strong>, 이후 줄 = 기술 스택으로 파싱됩니다. 더블클릭 후 <code>Shift+Enter</code>로 줄 구분.</p>
           <div class="help-code">웹 포털 (IIS)
 IIS 8.5
 ASP.NET 4.5
 Windows Server 2012</div>
-          <p style="margin-top:8px;">더블클릭 후 <code>Shift+Enter</code>로 줄 구분하여 입력하세요.</p>
         </div>
 
         <div class="help-section">
-          <h3>호스트 환경 구분 — 수영 레인(Swimlane)</h3>
-          <p>수영 레인 이름으로 호스트 환경을 인식합니다. 레인 이름을 아래 표와 정확히 일치시켜 주세요.</p>
+          <h3>주요 단축키</h3>
           <table class="help-table">
-            <thead><tr><th>수영 레인 이름</th><th>인식 결과</th></tr></thead>
+            <thead><tr><th>키</th><th>동작</th></tr></thead>
             <tbody>
-              <tr><td><code>On-Premise</code></td><td>on-premise</td></tr>
-              <tr><td><code>AWS Cloud</code></td><td>aws</td></tr>
-              <tr><td><code>GCP Cloud</code></td><td>gcp</td></tr>
-              <tr><td><code>Azure Cloud</code></td><td>azure</td></tr>
-              <tr><td><code>Hybrid</code></td><td>hybrid</td></tr>
+              <tr><td>빈 캔버스 더블클릭</td><td>새 컴포넌트 즉시 생성</td></tr>
+              <tr><td>노드 가장자리 드래그</td><td>연결선 생성</td></tr>
+              <tr><td>노드 우클릭 → Edit Style</td><td>스타일 직접 편집 (좌측 패널에서 복사한 스타일 붙여넣기)</td></tr>
+              <tr><td><code>Ctrl+S</code></td><td>저장 → ArchPilot 자동 반영</td></tr>
+              <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>실행 취소 / 재실행</td></tr>
+              <tr><td><code>Delete</code></td><td>선택 요소 삭제</td></tr>
             </tbody>
           </table>
         </div>
 
         <div class="help-warn">
-          ⚠️ <strong>Save 없이 탭을 닫으면 변경 사항이 사라집니다.</strong><br>
+          ⚠️ <strong>Save 없이 탭을 전환하면 변경 사항이 사라집니다.</strong><br>
           편집기는 인터넷 연결이 필요합니다 (embed.diagrams.net CDN 사용).
         </div>
       </div>
@@ -2474,74 +2550,94 @@ Windows Server 2012</div>
     <!-- ④ AI 활용 팁 -->
     <template x-if="helpTab==='tips'">
       <div style="display:flex; flex-direction:column; gap:16px;">
+
+        <div class="help-section">
+          <h3>💬 AI 대화로 표준 형식 채우기</h3>
+          <p>구조화 탭에 입력하기 막막하다면 <strong>AI 대화 탭</strong>에서 자연어로 시스템을 설명하세요. AI가 표준 YAML로 변환해 줍니다.</p>
+          <table class="help-table">
+            <thead><tr><th>상황</th><th>AI 대화 예시</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>시스템 개요 전달</td>
+                <td><em>"2008년에 구축한 은행 코어뱅킹 시스템이야. Java EE 6 / Oracle 11g 기반이고 온프레미스로 운영 중이야. 야간 배치 8시간이 걸리는 게 문제야."</em></td>
+              </tr>
+              <tr>
+                <td>컴포넌트 추가</td>
+                <td><em>"Redis 캐시 서버가 있고, Apache ActiveMQ로 비동기 처리해. ELB 뒤에 Tomcat 서버 3대 있어."</em></td>
+              </tr>
+              <tr>
+                <td>메타데이터 보완</td>
+                <td><em>"결제 DB는 criticality high야. 고객 정보 DB는 data_classification restricted고."</em></td>
+              </tr>
+              <tr>
+                <td>규제 요건 추가</td>
+                <td><em>"금융감독원 전자금융감독규정, PCI-DSS를 준수해야 해. compliance에 추가해줘."</em></td>
+              </tr>
+              <tr>
+                <td>알려진 문제 기술</td>
+                <td><em>"known_issues에 추가해줘: 단일 DB로 SPOF 존재, Java 7 EOL로 보안 패치 불가, 배포 주기 월 1회 제한."</em></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="help-tip" style="margin-top:10px;">
+            💡 대화 완료 후 <strong>📄 구조화 탭</strong>으로 이동하면 생성된 YAML을 확인·수정할 수 있습니다. <strong>📋 표준 템플릿</strong>을 먼저 불러온 뒤 AI와 대화하면 누락 필드를 쉽게 채울 수 있습니다.
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>🖊 draw.io 편집 후 AI로 메타데이터 보완</h3>
+          <p>비주얼 편집기로 구성도를 그린 뒤, AI 대화로 누락 메타데이터를 채우는 권장 워크플로우:</p>
+          <ol style="font-size:13px; line-height:1.9; color:var(--muted); padding-left:1.4em;">
+            <li>🖊 비주얼 편집기에서 컴포넌트 배치 + 호스트 Swimlane 설정 → Save</li>
+            <li>📄 구조화 탭에서 생성된 YAML 확인 (id, type, label, host 자동 채워짐)</li>
+            <li>💬 AI 대화 탭에서 기술 스택·vintage·criticality·known_issues 등을 대화로 추가</li>
+            <li>다시 구조화 탭으로 이동 → YAML 최종 확인 → <strong>⚙ 분석 시작</strong></li>
+          </ol>
+          <div class="help-tip">
+            💡 <strong>핵심</strong>: 편집기는 "구성 파악"에 강하고, AI 대화는 "메타데이터 채우기"에 강합니다. 두 가지를 조합하면 가장 빠르게 완성도 높은 입력을 만들 수 있습니다.
+          </div>
+        </div>
+
         <div class="help-section">
           <h3>분석 품질을 높이는 체크리스트</h3>
           <table class="help-table">
             <thead><tr><th>항목</th><th>효과</th><th>예시</th></tr></thead>
             <tbody>
-              <tr>
-                <td><code>domain</code> 지정</td>
-                <td>업종별 규정·패턴 반영</td>
-                <td><code>banking</code>, <code>ecommerce</code></td>
-              </tr>
-              <tr>
-                <td>기술 버전 명시</td>
-                <td>EOL 여부, 보안 취약점 판단</td>
-                <td><code>Java EE 6</code>, <code>Oracle 11g R2</code></td>
-              </tr>
-              <tr>
-                <td><code>vintage</code> 기재</td>
-                <td>레거시 정도 정량화</td>
-                <td>시스템: <code>2005</code>, 컴포넌트: <code>2010</code></td>
-              </tr>
-              <tr>
-                <td><code>known_issues</code> 작성</td>
-                <td>확인된 문제 최우선 반영</td>
-                <td><code>배치 처리 8시간 소요</code></td>
-              </tr>
-              <tr>
-                <td><code>compliance</code> 명시</td>
-                <td>마이그레이션 하드 제약 생성</td>
-                <td><code>PCI-DSS</code>, <code>PIPA</code></td>
-              </tr>
-              <tr>
-                <td><code>criticality</code> 지정</td>
-                <td>위험 가중치 조정</td>
-                <td>결제 서버: <code>high</code></td>
-              </tr>
-              <tr>
-                <td>컴포넌트 <code>notes</code> 기술</td>
-                <td>전문가 관찰 사항 pain point화</td>
-                <td><code>IE11 의존성 높음</code></td>
-              </tr>
+              <tr><td><code>domain</code> 지정</td><td>업종별 규정·패턴 반영</td><td><code>banking</code>, <code>ecommerce</code></td></tr>
+              <tr><td>기술 버전 명시</td><td>EOL 여부·보안 취약점 판단</td><td><code>Java EE 6</code>, <code>Oracle 11g R2</code></td></tr>
+              <tr><td><code>vintage</code> 기재</td><td>레거시 정도 정량화</td><td>시스템: <code>2005</code>, 컴포넌트: <code>2010</code></td></tr>
+              <tr><td><code>known_issues</code> 작성</td><td>확인된 문제 최우선 반영</td><td><code>배치 처리 8시간 소요</code></td></tr>
+              <tr><td><code>compliance</code> 명시</td><td>마이그레이션 하드 제약 생성</td><td><code>PCI-DSS</code>, <code>PIPA</code></td></tr>
+              <tr><td><code>criticality</code> 지정</td><td>위험 가중치 조정</td><td>결제 서버: <code>high</code></td></tr>
+              <tr><td>컴포넌트 <code>notes</code> 기술</td><td>전문가 관찰 사항 pain point화</td><td><code>IE11 의존성 높음</code></td></tr>
             </tbody>
           </table>
         </div>
 
         <div class="help-section">
           <h3>현대화 요구사항 작성 팁</h3>
-          <p>Step 2에서 현대화 요구사항을 입력할 때, 다음 항목을 포함하면 더 구체적인 설계를 얻을 수 있습니다:</p>
+          <p>Step 3에서 현대화 요구사항 입력 시 다음을 포함하면 구체적인 설계를 얻습니다:</p>
           <ul>
             <li><strong>목표 클라우드 환경</strong> — "AWS, EKS 기반 컨테이너화"</li>
             <li><strong>데이터베이스 전략</strong> — "Oracle → Aurora PostgreSQL 마이그레이션"</li>
             <li><strong>서비스 분리 방향</strong> — "결제·계좌·고객 도메인으로 마이크로서비스 분리"</li>
             <li><strong>성능 목표</strong> — "배치 처리를 이벤트 기반으로 전환, 실시간화"</li>
-            <li><strong>보안/컴플라이언스 유지</strong> — "PCI-DSS 준수 유지"</li>
+            <li><strong>보안/컴플라이언스 유지</strong> — "PCI-DSS 준수 유지, IAM 통합"</li>
           </ul>
+          <div class="help-tip">
+            💡 분석 완료 후 <strong>분석 결과(pain point · 추천 패턴 · 공수 추정)</strong>를 먼저 확인하고 요구사항을 작성하면 더 정확한 현대화 설계가 생성됩니다.
+          </div>
         </div>
 
         <div class="help-section">
-          <h3>단계별 흐름</h3>
+          <h3>단계별 흐름 요약</h3>
           <ol style="font-size:13px; line-height:1.9; color:var(--muted); padding-left:1.4em;">
-            <li><strong>Step 1 — 시스템 입력:</strong> 표준 YAML로 레거시 시스템 정의</li>
-            <li><strong>Step 2 — AI 분석:</strong> AI가 pain point, 기술 부채, 위험 영역 자동 식별</li>
-            <li><strong>Step 3 — 현대화 설계:</strong> 요구사항 기술 → 현대화 아키텍처 자동 생성</li>
-            <li><strong>Step 4 — 비교 & 발표:</strong> Before/After 비교 + 마이그레이션 로드맵 + 발표 자료</li>
+            <li><strong>Step 1 — 시스템 입력:</strong> 구조화 YAML · AI 대화 · 비주얼 편집기 중 선택 (또는 조합)</li>
+            <li><strong>Step 2 — 다이어그램 확인:</strong> 자동 생성된 Legacy 다이어그램 검토</li>
+            <li><strong>Step 3 — AI 분석:</strong> pain point · 기술 부채 · 위험 영역 자동 식별 + 5차원 품질 평가</li>
+            <li><strong>Step 4 — 현대화 설계:</strong> 요구사항 입력 → 현대화 아키텍처 자동 생성 (부분 수정 반복 가능)</li>
+            <li><strong>Step 5 — 비교 & 발표:</strong> Before/After 비교 + 마이그레이션 로드맵 + reveal.js 발표 자료</li>
           </ol>
-        </div>
-
-        <div class="help-tip">
-          💡 분석 완료 후 <strong>분석 결과를 확인</strong>하고, 공수 추정(S/M/L/XL)과 추천 패턴을 참고해 현대화 요구사항을 작성하면 더 정확한 설계가 생성됩니다.
         </div>
       </div>
     </template>
@@ -2660,7 +2756,7 @@ function archpilot() {
       diff:                false,
       design_perspectives: false,
       rationale:   false,
-      plan:        true,
+      plan:        false,
       plan_rmc:    false,
     },
     _panelResizing: false,
@@ -2675,85 +2771,85 @@ function archpilot() {
     _panStart:  null,
 
     // ── ArchPilot 컴포넌트 가이드 (가이드 패널 + 스타일 복사) ─────────
+    // style 문자열은 drawio.py STYLE_MAP과 완전히 동기화됨
     _DRAWIO_SHAPES: [
-      { type: 'server',      name: 'Server',       hint: 'Web/App 서버',       style: 'rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;' },
-      { type: 'database',    name: 'Database',     hint: '관계형 DB / NoSQL',  style: 'shape=cylinder3;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;' },
-      { type: 'cache',       name: 'Cache',        hint: 'Redis / Memcached',  style: 'ellipse;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;' },
-      { type: 'queue',       name: 'Queue',        hint: 'Kafka / SQS / MQ',  style: 'shape=mxgraph.bpmn.shape;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;' },
-      { type: 'storage',     name: 'Storage',      hint: 'S3 / NAS / 파일',   style: 'shape=mxgraph.cisco.servers.standard_server;html=1;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;' },
-      { type: 'cdn',         name: 'CDN',          hint: 'CloudFront / CDN',  style: 'ellipse;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;' },
-      { type: 'lb',          name: 'Load Balancer',hint: 'ELB / ALB / Nginx', style: 'rhombus;whiteSpace=wrap;fillColor=#f0a30a;strokeColor=#BD7000;' },
-      { type: 'gateway',     name: 'Gateway',      hint: 'API Gateway / Kong', style: 'rounded=1;arcSize=50;fillColor=#e1d5e7;strokeColor=#9673a6;' },
-      { type: 'service',     name: 'Service',      hint: '마이크로서비스',      style: 'rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;' },
-      { type: 'client',      name: 'Client',       hint: '웹 / 모바일 클라이언트', style: 'shape=mxgraph.cisco.computers.pc;html=1;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;' },
+      // ── 기본 컴포넌트 (10) ──────────────────────────────────────────
+      { type: 'server',     name: 'Server',       hint: 'Web/App 서버',        style: 'rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;' },
+      { type: 'database',   name: 'Database',     hint: '관계형 DB / NoSQL',   style: 'shape=mxgraph.flowchart.database;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;' },
+      { type: 'cache',      name: 'Cache',        hint: 'Redis / Memcached',   style: 'ellipse;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;' },
+      { type: 'queue',      name: 'Queue',        hint: 'Kafka / SQS / MQ',   style: 'shape=mxgraph.flowchart.delay;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;' },
+      { type: 'storage',    name: 'Storage',      hint: 'S3 / NAS / 파일',    style: 'shape=mxgraph.flowchart.stored_data;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;' },
+      { type: 'cdn',        name: 'CDN',          hint: 'CloudFront / CDN',   style: 'ellipse;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;' },
+      { type: 'lb',         name: 'Load Balancer',hint: 'ELB / ALB / Nginx',  style: 'rhombus;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;' },
+      { type: 'gateway',    name: 'Gateway',      hint: 'API Gateway / Kong', style: 'rounded=1;arcSize=50;whiteSpace=wrap;fillColor=#e1d5e7;strokeColor=#9673a6;' },
+      { type: 'service',    name: 'Service',      hint: '마이크로서비스',       style: 'rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;' },
+      { type: 'client',     name: 'Client',       hint: '웹 / 모바일 클라이언트', style: 'shape=mxgraph.flowchart.terminator;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;' },
+      // ── 엔터프라이즈 컴포넌트 (5) ──────────────────────────────────
+      { type: 'divider', divider: true, name: '엔터프라이즈' },
+      { type: 'mainframe',  name: 'Mainframe',    hint: 'IBM z/OS / COBOL',   style: 'rounded=0;whiteSpace=wrap;fillColor=#ccccff;strokeColor=#3333cc;fontStyle=1;' },
+      { type: 'esb',        name: 'ESB',          hint: 'MuleSoft / IBM MQ',  style: 'rounded=1;arcSize=30;whiteSpace=wrap;fillColor=#f0d0ff;strokeColor=#9933cc;' },
+      { type: 'security',   name: 'Security',     hint: 'WAF / IAM / HSM',    style: 'shape=mxgraph.flowchart.decision;whiteSpace=wrap;fillColor=#ffe6e6;strokeColor=#cc0000;' },
+      { type: 'monitoring', name: 'Monitoring',   hint: 'Grafana / Prometheus',style: 'rounded=1;whiteSpace=wrap;fillColor=#fffacd;strokeColor=#d4ac0d;' },
+      { type: 'unknown',    name: 'Unknown',      hint: '미분류 컴포넌트',      style: 'rounded=1;whiteSpace=wrap;' },
+      // ── 호스트 환경 Swimlane (5) ────────────────────────────────────
+      { type: 'divider2', divider: true, name: '호스트 환경' },
+      { type: 'host-onpremise', swimType: 'onpremise', name: 'On-Premise',  hint: '자체 데이터센터',   style: 'swimlane;startSize=28;fillColor=#E6E6E6;strokeColor=#666666;fontStyle=1;fontSize=11;fontColor=#333333;' },
+      { type: 'host-aws',       swimType: 'aws',        name: 'AWS Cloud',   hint: 'Amazon Web Services', style: 'swimlane;startSize=28;fillColor=#FFE6CC;strokeColor=#d79b00;fontStyle=1;fontSize=11;fontColor=#7A4000;' },
+      { type: 'host-gcp',       swimType: 'gcp',        name: 'GCP Cloud',   hint: 'Google Cloud Platform', style: 'swimlane;startSize=28;fillColor=#E8F0FE;strokeColor=#4285F4;fontStyle=1;fontSize=11;fontColor=#1A3C8C;' },
+      { type: 'host-azure',     swimType: 'azure',      name: 'Azure Cloud', hint: 'Microsoft Azure',  style: 'swimlane;startSize=28;fillColor=#CCE5F5;strokeColor=#0078D4;fontStyle=1;fontSize=11;fontColor=#004578;' },
+      { type: 'host-hybrid',    swimType: 'hybrid',     name: 'Hybrid',      hint: '온프레미스 + 클라우드', style: 'swimlane;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;fontColor=#1E4D1E;' },
     ],
 
     // ── diagrams.net 커스텀 ArchPilot 라이브러리 설정 ────────────────
+    // STYLE_MAP 및 HOST_SWIMLANE_STYLES와 완전히 동기화됨
     _DRAWIO_CONFIG: {
       defaultLibraries: 'general',
       libraries: [{
         title: 'ArchPilot',
         entries: [
-          {
-            title: 'Server',
-            desc: '서버 / 백엔드 서비스',
-            w: 120, h: 60,
-            xml: '<mxCell style="rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Database',
-            desc: '관계형 DB / NoSQL',
-            w: 80, h: 80,
-            xml: '<mxCell style="shape=cylinder3;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Cache',
-            desc: 'Redis / Memcached',
-            w: 100, h: 60,
-            xml: '<mxCell style="ellipse;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1"><mxGeometry width="100" height="60" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Queue',
-            desc: 'Kafka / RabbitMQ / SQS',
-            w: 120, h: 60,
-            xml: '<mxCell style="shape=mxgraph.bpmn.shape;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Storage',
-            desc: '파일 / 오브젝트 스토리지',
-            w: 60, h: 80,
-            xml: '<mxCell style="shape=mxgraph.cisco.servers.standard_server;html=1;pointerEvents=1;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;" vertex="1"><mxGeometry width="60" height="80" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'CDN',
-            desc: 'CloudFront / CDN',
-            w: 100, h: 60,
-            xml: '<mxCell style="ellipse;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1"><mxGeometry width="100" height="60" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Load Balancer',
-            desc: 'ELB / ALB / L4-L7',
-            w: 80, h: 80,
-            xml: '<mxCell style="rhombus;whiteSpace=wrap;fillColor=#f0a30a;fontColor=#000000;strokeColor=#BD7000;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Gateway',
-            desc: 'API Gateway',
-            w: 120, h: 60,
-            xml: '<mxCell style="rounded=1;arcSize=50;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Service',
-            desc: '마이크로서비스 / 내부 서비스',
-            w: 120, h: 60,
-            xml: '<mxCell style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>',
-          },
-          {
-            title: 'Client',
-            desc: '웹/모바일 클라이언트',
-            w: 50, h: 70,
-            xml: '<mxCell style="shape=mxgraph.cisco.computers.pc;html=1;pointerEvents=1;dashed=0;fillColor=#036897;strokeColor=#ffffff;strokeWidth=2;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1"><mxGeometry width="50" height="70" as="geometry"/></mxCell>',
-          },
+          // ── 기본 컴포넌트 ──────────────────────────────────────────
+          { title: 'Server',        desc: '서버 / 백엔드 서비스',          w: 140, h: 60,
+            xml: '<mxCell style="rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1"><mxGeometry width="140" height="60" as="geometry"/></mxCell>' },
+          { title: 'Database',      desc: '관계형 DB / NoSQL',            w: 80,  h: 80,
+            xml: '<mxCell style="shape=mxgraph.flowchart.database;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>' },
+          { title: 'Cache',         desc: 'Redis / Memcached',            w: 100, h: 60,
+            xml: '<mxCell style="ellipse;whiteSpace=wrap;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1"><mxGeometry width="100" height="60" as="geometry"/></mxCell>' },
+          { title: 'Queue',         desc: 'Kafka / RabbitMQ / SQS',      w: 120, h: 60,
+            xml: '<mxCell style="shape=mxgraph.flowchart.delay;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>' },
+          { title: 'Storage',       desc: '파일 / 오브젝트 스토리지',      w: 60,  h: 80,
+            xml: '<mxCell style="shape=mxgraph.flowchart.stored_data;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1"><mxGeometry width="60" height="80" as="geometry"/></mxCell>' },
+          { title: 'CDN',           desc: 'CloudFront / Akamai',          w: 100, h: 60,
+            xml: '<mxCell style="ellipse;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1"><mxGeometry width="100" height="60" as="geometry"/></mxCell>' },
+          { title: 'Load Balancer', desc: 'ELB / ALB / Nginx LB',        w: 80,  h: 80,
+            xml: '<mxCell style="rhombus;whiteSpace=wrap;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>' },
+          { title: 'Gateway',       desc: 'API Gateway / Kong',           w: 140, h: 60,
+            xml: '<mxCell style="rounded=1;arcSize=50;whiteSpace=wrap;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1"><mxGeometry width="140" height="60" as="geometry"/></mxCell>' },
+          { title: 'Service',       desc: '마이크로서비스 / 내부 서비스',  w: 140, h: 60,
+            xml: '<mxCell style="rounded=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1"><mxGeometry width="140" height="60" as="geometry"/></mxCell>' },
+          { title: 'Client',        desc: '웹 / 모바일 클라이언트',        w: 60,  h: 80,
+            xml: '<mxCell style="shape=mxgraph.flowchart.terminator;whiteSpace=wrap;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1"><mxGeometry width="60" height="80" as="geometry"/></mxCell>' },
+          // ── 엔터프라이즈 컴포넌트 ──────────────────────────────────
+          { title: 'Mainframe',     desc: 'IBM z/OS / COBOL 배치',        w: 140, h: 80,
+            xml: '<mxCell style="rounded=0;whiteSpace=wrap;fillColor=#ccccff;strokeColor=#3333cc;fontStyle=1;" vertex="1"><mxGeometry width="140" height="80" as="geometry"/></mxCell>' },
+          { title: 'ESB',           desc: 'MuleSoft / IBM MQ / TIBCO',   w: 160, h: 60,
+            xml: '<mxCell style="rounded=1;arcSize=30;whiteSpace=wrap;fillColor=#f0d0ff;strokeColor=#9933cc;" vertex="1"><mxGeometry width="160" height="60" as="geometry"/></mxCell>' },
+          { title: 'Security',      desc: 'WAF / IAM / HSM / Firewall',  w: 80,  h: 80,
+            xml: '<mxCell style="shape=mxgraph.flowchart.decision;whiteSpace=wrap;fillColor=#ffe6e6;strokeColor=#cc0000;" vertex="1"><mxGeometry width="80" height="80" as="geometry"/></mxCell>' },
+          { title: 'Monitoring',    desc: 'Grafana / Prometheus / APM',  w: 140, h: 60,
+            xml: '<mxCell style="rounded=1;whiteSpace=wrap;fillColor=#fffacd;strokeColor=#d4ac0d;" vertex="1"><mxGeometry width="140" height="60" as="geometry"/></mxCell>' },
+          { title: 'Unknown',       desc: '미분류 컴포넌트',               w: 120, h: 60,
+            xml: '<mxCell style="rounded=1;whiteSpace=wrap;" vertex="1"><mxGeometry width="120" height="60" as="geometry"/></mxCell>' },
+          // ── 호스트 환경 Swimlane 컨테이너 ──────────────────────────
+          { title: 'On-Premise',    desc: '자체 데이터센터 영역',           w: 560, h: 320,
+            xml: '<mxCell style="swimlane;startSize=28;fillColor=#E6E6E6;strokeColor=#666666;fontStyle=1;fontSize=11;fontColor=#333333;" vertex="1"><mxGeometry width="560" height="320" as="geometry"/></mxCell>' },
+          { title: 'AWS Cloud',     desc: 'Amazon Web Services 영역',     w: 560, h: 320,
+            xml: '<mxCell style="swimlane;startSize=28;fillColor=#FFE6CC;strokeColor=#d79b00;fontStyle=1;fontSize=11;fontColor=#7A4000;" vertex="1"><mxGeometry width="560" height="320" as="geometry"/></mxCell>' },
+          { title: 'GCP Cloud',     desc: 'Google Cloud Platform 영역',  w: 560, h: 320,
+            xml: '<mxCell style="swimlane;startSize=28;fillColor=#E8F0FE;strokeColor=#4285F4;fontStyle=1;fontSize=11;fontColor=#1A3C8C;" vertex="1"><mxGeometry width="560" height="320" as="geometry"/></mxCell>' },
+          { title: 'Azure Cloud',   desc: 'Microsoft Azure 영역',         w: 560, h: 320,
+            xml: '<mxCell style="swimlane;startSize=28;fillColor=#CCE5F5;strokeColor=#0078D4;fontStyle=1;fontSize=11;fontColor=#004578;" vertex="1"><mxGeometry width="560" height="320" as="geometry"/></mxCell>' },
+          { title: 'Hybrid',        desc: '온프레미스 + 클라우드 혼합',    w: 560, h: 320,
+            xml: '<mxCell style="swimlane;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;fontColor=#1E4D1E;" vertex="1"><mxGeometry width="560" height="320" as="geometry"/></mxCell>' },
         ],
       }],
     },

@@ -45,7 +45,7 @@ def setup(
     동작:
       1. ~/.archpilot/archpilot-library.drawio.xml 생성
       2. draw.io Desktop localStorage(LevelDB)에 라이브러리 등록
-      3. defaultLibraries를 빈 문자열로 설정해 기본 패널 숨김
+      3. libraries를 빈 문자열로 설정해 기본 패널 숨김
 
     주의: 실행 전 draw.io Desktop을 완전히 종료해야 합니다.
     """
@@ -53,6 +53,7 @@ def setup(
         find_drawio_executable,
         find_drawio_localstorage_path,
         inject_custom_library,
+        remove_custom_library,
     )
     from archpilot.renderers.drawio_library import write_library_file
 
@@ -69,12 +70,24 @@ def setup(
         )
         raise typer.Exit(1)
 
-    # ── 2. 라이브러리 파일 생성 ───────────────────────────────────────────
+    # ── 2. reset: 기존 설정 제거 ──────────────────────────────────────────
     lib_path = (library_dir or _default_library_path().parent) / _LIBRARY_FILENAME
+    if reset:
+        console.print("[yellow]🔄 기존 설정 초기화 중...[/yellow]")
+        if lib_path.exists():
+            lib_path.unlink()
+            console.print(f"[dim]  라이브러리 파일 삭제: {lib_path}[/dim]")
+        if remove_custom_library():
+            console.print("[dim]  localStorage ArchPilot 항목 제거 완료[/dim]")
+        else:
+            console.print("[dim]  localStorage: 제거할 항목 없음 (정상)[/dim]")
+        console.print()
+
+    # ── 3. 라이브러리 파일 생성 ───────────────────────────────────────────
     write_library_file(lib_path)
     console.print(f"[green]✅ 라이브러리 생성:[/green] {lib_path}")
 
-    # ── 3. Electron localStorage에 라이브러리 등록 ────────────────────────
+    # ── 4. Electron localStorage에 라이브러리 등록 ────────────────────────
     # draw.io Desktop은 설정을 config.json이 아닌 Electron 브라우저 localStorage(LevelDB)에 저장한다.
     # DesktopLibrary.prototype.getHash() = 'S' + encodeURIComponent(path)
     console.print("[dim]draw.io Desktop이 닫혀 있어야 합니다.[/dim]")
@@ -115,7 +128,7 @@ def setup(
 @app.command("edit")
 def edit(
     output: Annotated[Path | None, typer.Option("--output", "-o", help="output 디렉토리")] = None,
-    watch: Annotated[bool, typer.Option("--watch", "-w", help="저장 시 자동 파싱 (file watch)")] = True,
+    watch: Annotated[bool, typer.Option("--watch/--no-watch", help="저장 시 자동 파싱 (file watch)")] = True,
 ) -> None:
     """draw.io Desktop으로 다이어그램을 열고 변경을 감시합니다.
 

@@ -28,6 +28,8 @@ MAX_ANALYSIS_CHARS: int = 12_000
 MAX_PLAN_SYSTEM_CHARS: int = 30_000
 
 # ── LLM 출력 토큰 상한 ────────────────────────────────────────────────────────
+# chat ingest: 대화형 시스템 추출 — 단일 사용자 메시지 응답
+MAX_CHAT_TOKENS: int = 4_096
 # analyze: 분석 JSON — 컴포넌트 10개 기준 ~3000 토큰
 MAX_ANALYZE_TOKENS: int = 6_000
 # modernize: 현대화 시스템 JSON — 30개+ 컴포넌트 기준 ~12000 토큰

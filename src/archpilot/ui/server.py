@@ -41,9 +41,11 @@ def create_app(output_dir: Path = Path("./output")) -> FastAPI:
 
     # ── 페이지 라우트 ─────────────────────────────────────────────────────────
 
+    _NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request):
-        return templates.TemplateResponse("app.html.j2", {"request": request})
+        return templates.TemplateResponse("app.html.j2", {"request": request}, headers=_NO_CACHE)
 
     @app.get("/slides", response_class=HTMLResponse)
     async def slides(request: Request, theme: str = "black"):

@@ -2,7 +2,7 @@
 
 > 설치부터 발표 자료까지 — 단계별 워크플로우
 
-**Version**: 0.2.4 | **Last Updated**: 2026-03-15
+**Version**: 0.2.5 | **Last Updated**: 2026-03-16
 
 ---
 
@@ -68,9 +68,6 @@ ARCHPILOT_SERVER_PORT=8080
 ```
 
 > **고품질 분석이 필요한 경우** `OPENAI_MODEL=gpt-4o` 로 변경하세요.
-> **팁**: 전역 설정은 어느 디렉토리에서 실행해도 자동 로드됩니다.
-> 프로젝트별 다른 설정이 필요하면 해당 디렉토리에 `.env`를 만들면 전역 설정을 오버라이드합니다.
-
 > **팁**: 전역 설정은 어느 디렉토리에서 실행해도 자동 로드됩니다.
 > 프로젝트별 다른 설정이 필요하면 해당 디렉토리에 `.env`를 만들면 전역 설정을 오버라이드합니다.
 
@@ -221,19 +218,60 @@ archpilot serve output/ --open
 
 ---
 
-## 4. 시나리오 B — draw.io Desktop으로 시작
+## 4. 시나리오 B — draw.io 파일로 시작
 
-draw.io Desktop에서 직접 다이어그램을 그려 입력하는 방법입니다.
+draw.io로 작성된 다이어그램을 ArchPilot 입력으로 사용하는 방법입니다.
 자세한 내용은 [`DRAWIO.md`](./5_DRAWIO.md)를 참조하세요.
 
-### Step 1: 초기 설정 (최초 1회)
+> **이미 .drawio 파일이 있다면 빠른 시작:**
+> ```bash
+> archpilot ingest ~/Desktop/my-diagram.drawio
+> archpilot analyze output/system.json -r "현대화 목표"
+> archpilot modernize output/system.json -r "현대화 목표"
+> archpilot serve output/ --open
+> ```
+> draw.io Desktop 설치 없이도 즉시 사용 가능합니다. → Step 3으로 바로 이동
+
+---
+
+### Step 0: draw.io에서 시스템 그리기 (신규 작성 시)
+
+draw.io Desktop 또는 [diagrams.net](https://www.diagrams.net)에서 시스템 토폴로지를 그립니다.
+
+**draw.io 파일 준비 방법별 안내:**
+
+| 방법 | 설명 | Step |
+|------|------|------|
+| 이미 .drawio 파일 있음 | 파일 바로 사용 | Step 3으로 이동 |
+| draw.io Desktop에서 새로 그리기 | Desktop 설치 후 ArchPilot 팔레트 활용 | Step 1 → Step 2 순서 |
+| diagrams.net(웹)에서 그리기 | 브라우저에서 직접 그린 후 XML 저장 | Step 0.1 후 Step 3 |
+| Web UI 내장 편집기 | `archpilot serve` 후 편집 탭 | Step 0.2 후 분석 진행 |
+
+**Step 0.1 — diagrams.net(웹) 사용 시:**
+```
+diagrams.net에서 그리기
+→ File → Export As → XML (또는 Extras → Edit Diagram → 전체 복사)
+→ .drawio 파일로 저장
+→ Step 3으로 이동
+```
+
+**Step 0.2 — Web UI 내장 편집기 사용 시:**
+```bash
+archpilot serve output/ --open
+```
+브라우저 → `🖊 편집` 탭 → draw.io 편집기에서 그리기 → **Save** 클릭
+→ 자동으로 system.json 생성됨 → 분석/현대화 탭에서 바로 진행 가능
+
+---
+
+### Step 1: draw.io Desktop 초기 설정 (최초 1회, Desktop 사용 시)
 
 ```bash
 # draw.io Desktop이 완전히 종료된 상태에서
 archpilot drawio setup
 ```
 
-### Step 2: draw.io Desktop에서 그리기
+### Step 2: draw.io Desktop에서 그리기 (Desktop 사용 시)
 
 draw.io Desktop을 실행하면 ArchPilot 팔레트가 사이드바에 표시됩니다.
 
@@ -244,7 +282,7 @@ draw.io Desktop을 실행하면 ArchPilot 팔레트가 사이드바에 표시됩
 
 ### Step 3: ArchPilot에 반영
 
-**방법 1: 파일 직접 ingest**
+**방법 1: 파일 직접 ingest** ← 이미 파일이 있는 경우 여기서 시작
 ```bash
 archpilot ingest ~/Desktop/my-diagram.drawio
 ```
@@ -526,6 +564,7 @@ archpilot modernize output/system.json \
 --requirements, -r   현대화 요구사항 (생략 시 대화형 입력)
 --output, -o         출력 디렉토리 (기본: system.json 위치)
 --format, -f         다이어그램 포맷: mermaid,png,svg,drawio (기본: mermaid)
+--scenario, -s       현대화 시나리오: full_replace|partial|additive (미지정 시 분석 결과 권장값 사용)
 --no-analysis        analysis.json 자동 참조 건너뜀
 ```
 
@@ -648,10 +687,13 @@ CLI에서는 `analysis.json`의 `recommended_scenario`가 자동 적용됩니다
 
 수동 변경 방법:
 ```bash
-# 1. analysis.json에서 직접 편집
+# 1. --scenario 옵션으로 직접 지정 (가장 간단)
+archpilot modernize output/system.json -r "요구사항" --scenario partial
+
+# 2. analysis.json에서 직접 편집
 vim output/analysis.json  # recommended_scenario 값 변경
 
-# 2. 또는 analysis 건너뜀
+# 3. 또는 analysis 건너뜀
 archpilot modernize output/system.json -r "요구사항" --no-analysis
 ```
 
