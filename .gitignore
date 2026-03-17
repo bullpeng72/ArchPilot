@@ -31,3 +31,6 @@ Thumbs.db
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+*.tsv
+catboost_info/catboost_training.json
+catboost_info/learn/events.out.tfevents
