@@ -176,7 +176,7 @@ LLM이 자신의 분석을 재귀적으로 검토합니다:
 |------|----------|---------|
 | 언어·런타임·프레임워크 | Java 8~21, Python 3.x, Spring Boot 2/3, FastAPI | ~33 |
 | 웹·앱 서버 | IIS 6/7/8.5, Tomcat 6/7, WebLogic, WebSphere, JBoss | ~16 |
-| RDBMS·메인프레임 DB | Oracle 9i-19c, MySQL 5.5-8, DB2, Sybase, IBM IMS, VSAM | ~19 |
+| RDBMS·메인프레임 DB | Oracle 9i -19c, MySQL 5.5~8, DB2, Sybase, IBM IMS, VSAM | ~19 |
 | 클라우드 관리형 DB | Aurora, DynamoDB, Cosmos DB, BigQuery, Snowflake, Pinecone | ~32 |
 | 메시지 큐·ESB | Kafka, IBM MQ, TIBCO, RabbitMQ, MuleSoft, BizTalk | ~33 |
 | 메인프레임 | COBOL, CICS, JCL, RPG, AS/400, HP NonStop (z/OS) | ~9 |
